@@ -13,6 +13,5 @@ export default defineConfig({
         background: resolve(__dirname, "background.html"),
       },
     },
-    base: './', //change the base configuration to an object
   },
 });
