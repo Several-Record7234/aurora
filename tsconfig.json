@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": "vite", 
+    "types": ["vite"], 
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
