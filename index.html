@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aurora</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 16px;
+      background: #f5f5f5;
+      color: #333;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .container {
+      height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── Header ──────────────────────────── */
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 11px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    /* ── Help Section ────────────────────── */
+
+    .help-section {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 11px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .help-section p {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+
+    .help-section p:last-child {
+      margin-bottom: 0;
+    }
+
+    .help-section strong {
+      color: #333;
+    }
+
+    /* ── Presets Section ─────────────────── */
+
+    .presets-section {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .presets-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .presets-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .presets-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .action-btn {
+      background: none;
+      border: none;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 3px;
+      transition: opacity 0.2s;
+    }
+
+    .action-btn.rename {
+      color: #2196F3;
+    }
+
+    .action-btn.clear {
+      color: #f44336;
+    }
+
+    .action-btn.active {
+      text-decoration: underline;
+      font-weight: 700;
+    }
+
+    .action-btn:hover {
+      opacity: 0.7;
+    }
+
+    /* ── Preset Grid ─────────────────────── */
+
+    #presetsList {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .preset-item {
+      padding: 10px 12px;
+      background: #f9f9f9;
+      border-radius: 6px;
+      cursor: default;
+      border: 2px solid #e0e0e0;
+      min-width: 0;
+      transition: border-color 0.2s;
+      user-select: none;
+    }
+
+    .preset-item.empty {
+      opacity: 0.5;
+    }
+
+    .preset-item.highlight-rename {
+      border-color: #2196F3;
+      cursor: pointer;
+    }
+
+    .preset-item.highlight-rename:hover {
+      background: #E3F2FD;
+    }
+
+    .preset-item.highlight-clear {
+      border-color: #f44336;
+      cursor: pointer;
+    }
+
+    .preset-item.highlight-clear:hover {
+      background: #FFEBEE;
+    }
+
+    .preset-name {
+      font-size: 13px;
+      color: #333;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .preset-values {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+      overflow-wrap: break-word;
+    }
+
+    /* ── Rename Dialog ───────────────────── */
+
+    .rename-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .rename-dialog {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      width: 220px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .rename-dialog h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .rename-dialog input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .rename-dialog-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .rename-dialog-buttons button {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .rename-dialog-buttons .cancel {
+      background: #eee;
+      color: #333;
+    }
+
+    .rename-dialog-buttons .confirm {
+      background: #2196F3;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-row">
+      <span class="header-title">🌅 Aurora</span>
+    </div>
+
+    <div class="help-section">
+      <p><strong>How to use:</strong> Right-click any item on the <strong>Map layer</strong> and select <strong>Add Aurora</strong> to apply colour grading. Use <strong>Aurora Settings</strong> on the same menu to adjust.</p>
+      <p>Manage your saved presets below. Presets are shared across all scenes in this room.</p>
+    </div>
+
+    <div class="presets-section">
+      <div class="presets-header-row">
+        <span class="presets-title">Preset Library</span>
+        <span class="presets-actions">
+          <button class="action-btn rename" id="renameModeBtn">Rename</button>
+          <button class="action-btn clear" id="clearModeBtn">Clear</button>
+        </span>
+      </div>
+      <div id="presetsList">
+        <!-- Presets rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

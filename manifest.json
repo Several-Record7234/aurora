@@ -1,0 +1,17 @@
+{
+  "name": "Aurora",
+  "description": "HSL colour grading effects for maps. Right-click a map to add Aurora, then adjust hue, saturation, lightness, and opacity.",
+  "version": "1.0.0",
+  "manifest_version": 1,
+  "author": "Andrew C",
+  "homepage_url": "https://extensions.owlbear.rodeo/aurora",
+  "icon": "/icon.png",
+  "background_url": "/background.html",
+  "action": {
+    "title": "Aurora",
+    "icon": "/icon.png",
+    "popover": "/",
+    "height": 420,
+    "width": 350
+  }
+}
