@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["vite-env.d.ts", "src"]
+  "include": ["src"]
 }
