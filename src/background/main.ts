@@ -10,9 +10,9 @@ OBR.onReady(() => {
 });
 
 // Clean up on HMR refresh (development only)
-if (import.meta.hot) {
-  import.meta.hot.accept();
-  import.meta.hot.dispose(() => {
-    cleanup?.();
-  });
-}
+// if (import.meta.hot) {
+//  import.meta.hot.accept();
+//  import.meta.hot.dispose(() => {
+//    cleanup?.();
+//  });
+//}
