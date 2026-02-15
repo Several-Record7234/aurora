@@ -1,6 +1,6 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { createAuroraMenu } from "./createAuroraMenu";
-import { startEffectManager } from "./effectManager";
+//import { startEffectManager } from "./effectManager";
 
 //let cleanup: (() => void) | null = null;
 
