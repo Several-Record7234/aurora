@@ -11,7 +11,7 @@ OBR.onReady(() => {
 });
 
 // Debug only, allow dev console commands for OBR functions
-(window as any).OBR = OBR;
+// (window as any).OBR = OBR;
 
 // Clean up on HMR refresh (development only)
 // if (import.meta.hot) {
