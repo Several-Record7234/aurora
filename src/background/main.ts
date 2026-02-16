@@ -6,7 +6,8 @@ import { createAuroraMenu } from "./createAuroraMenu";
 
 OBR.onReady(() => {
   createAuroraMenu();
-//  cleanup = startEffectManager();
+//  cleanup = 
+  startEffectManager();
 });
 
 // Debug only, allow dev console commands for OBR functions
