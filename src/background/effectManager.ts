@@ -33,19 +33,26 @@ function effectSourceKey(): string {
   return getPluginId("sourceItemId");
 }
 
-// ── Config Snapshot Cache ─────────────────────────────────────────
+// ── Effect Snapshot Cache ─────────────────────────────────────────
 //
-// Maps source-item ID → a JSON snapshot of the AuroraConfig that was
-// last used to create its effect. On each reconcile pass we compare the
-// current config against this snapshot; if they match we skip the item
-// entirely, avoiding needless delete-then-add cycles.
+// Maps source-item ID → a snapshot string of all properties that feed
+// into the local effect (Aurora config + parent transform). On each
+// reconcile pass we compare the current snapshot against the cached one;
+// if they match we skip the item, avoiding needless delete-then-add
+// cycles. This means scale, position, rotation, and visibility changes
+// on the parent item will also trigger an effect rebuild.
 
-const configCache = new Map<string, string>();
+const snapshotCache = new Map<string, string>();
 
-/** Serialise an AuroraConfig to a stable string for comparison */
-function configSnapshot(config: AuroraConfig): string {
-  // Deterministic key order via explicit concatenation (faster than JSON.stringify)
-  return `${config.s}|${config.l}|${config.h}|${config.o}|${config.e}`;
+/** Serialise Aurora config + parent transform into a stable comparison key */
+function effectSnapshot(config: AuroraConfig, item: Item): string {
+  return [
+    config.s, config.l, config.h, config.o, config.e,
+    item.position.x, item.position.y,
+    item.rotation,
+    item.scale.x, item.scale.y,
+    item.visible,
+  ].join("|");
 }
 
 // ── Effect Helpers ────────────────────────────────────────────────
@@ -63,7 +70,7 @@ async function removeAllEffects(): Promise<void> {
   if (effects.length > 0) {
     await OBR.scene.local.deleteItems(effects.map((e) => e.id));
   }
-  configCache.clear();
+  snapshotCache.clear();
 }
 
 /**
@@ -82,14 +89,19 @@ async function removeAllEffects(): Promise<void> {
  *    modelView to compute correct screen-space coordinates the effect
  *    must know its actual position in the scene.
  *
- * 2. WIDTH/HEIGHT: not set
+ * 2. SCALE: must be parent.scale
+ *    The modelView matrix must incorporate the parent's scale so that the
+ *    shader's coordinate-to-screen mapping matches the actual rendered size
+ *    of the parent item (e.g. when the user resizes via "Align Image").
+ *
+ * 3. WIDTH/HEIGHT: not set
  *    ATTACHMENT effects auto-fill the parent item's display bounds.
  *
- * 3. LAYER: POST_PROCESS
+ * 4. LAYER: POST_PROCESS
  *    Required for access to the `uniform shader scene` built-in, which
  *    lets the shader sample the current rendered scene colour at each pixel.
  *
- * 4. disableAttachmentBehavior(["COPY"])
+ * 5. disableAttachmentBehavior(["COPY"])
  *    Local items (effects) must not be copied when the parent is duplicated;
  *    the effect manager will create new effects for any new items that have
  *    Aurora config in their metadata.
@@ -100,6 +112,7 @@ function buildAuroraEffect(parent: Item, config: AuroraConfig): Effect {
     .effectType("ATTACHMENT")
     .position(parent.position)
     .rotation(parent.rotation)
+    .scale(parent.scale)
     .visible(parent.visible)
     .locked(true)
     .disableHit(true)
@@ -164,7 +177,7 @@ async function reconcileEffects(items: Item[]): Promise<void> {
       if (!auroraItems.has(sourceId)) {
         // Source item no longer has Aurora config — remove its effect
         idsToRemove.push(effectItem.id);
-        configCache.delete(sourceId);
+        snapshotCache.delete(sourceId);
       }
     }
 
@@ -173,8 +186,8 @@ async function reconcileEffects(items: Item[]): Promise<void> {
     const effectsToAdd: Effect[] = [];
 
     for (const [itemId, { item, config }] of auroraItems) {
-      const snap = configSnapshot(config);
-      const cached = configCache.get(itemId);
+      const snap = effectSnapshot(config, item);
+      const cached = snapshotCache.get(itemId);
 
       if (cached === snap && effectsBySource.has(itemId)) {
         // Config unchanged and effect already exists — skip
@@ -194,7 +207,7 @@ async function reconcileEffects(items: Item[]): Promise<void> {
 
       // Update cache (even for disabled configs, so we don't keep
       // trying to recreate them on every reconcile)
-      configCache.set(itemId, snap);
+      snapshotCache.set(itemId, snap);
     }
 
     // ── Execute batched SDK operations ──────────────────────────
