@@ -88,18 +88,20 @@ async function removeAllEffects(): Promise<void> {
  * For Images, this bounding box is defined by the image dimensions and
  * grid.offset — no correction needed.
  *
- * For Shapes, the bounding box includes the stroke (extending by
- * strokeWidth/2 on each side beyond the geometric fill area). The
- * effect's local (0,0) therefore starts at the outer edge of the
- * stroke, not the geometric corner. Since the modelView matrix maps
- * based on the shape's geometric transform, the stroke expansion
- * introduces a small positive offset (down-right). We compensate
- * by shifting local coords by -halfStroke before the transform.
+ * For Shapes, the bounding box includes the stroke (extending beyond
+ * the geometric fill area). The effect's local (0,0) therefore starts
+ * at the outer edge of the stroke, not the geometric corner. Since
+ * the modelView matrix maps based on the shape's geometric transform,
+ * the stroke expansion introduces a small positive offset (down-right).
+ * We compensate by shifting local coords by -strokeWidth before the
+ * transform. Empirical testing shows the full stroke width (not half)
+ * is needed, suggesting the bounding box padding extends by the full
+ * stroke width on each side.
  */
 function getCoordOffset(item: Item): { x: number; y: number } {
   if (isShape(item)) {
-    const halfStroke = (item.style.strokeWidth ?? 0) / 2;
-    return { x: -halfStroke, y: -halfStroke };
+    const strokeWidth = item.style.strokeWidth ?? 0;
+    return { x: -strokeWidth, y: -strokeWidth };
   }
   return { x: 0, y: 0 };
 }
