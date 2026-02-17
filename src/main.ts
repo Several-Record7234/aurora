@@ -23,7 +23,7 @@ import { loadPresets, savePresets, clearPresetSlot, getPresetsKey } from "./shar
 
 /** Dimensions of the action popover (pixels) */
 const POPOVER_WIDTH = 350;
-const POPOVER_HEIGHT = 572;
+const POPOVER_HEIGHT = 580;
 
 // ── State ─────────────────────────────────────────────────────────
 
