@@ -18,7 +18,7 @@ import { getPluginId } from "../shared/pluginId";
 import { DEFAULT_CONFIG } from "../shared/types";
 
 /** Popover height for the Aurora Settings embed (pixels) */
-const SETTINGS_EMBED_HEIGHT = 380;
+const SETTINGS_EMBED_HEIGHT = 424;
 
 export function createAuroraMenu() {
   const CONFIG_KEY = getPluginId("config");
