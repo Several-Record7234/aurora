@@ -88,30 +88,38 @@ async function removeAllEffects(): Promise<void> {
  * reported by OBR. For Images, this aligns with the modelView
  * transform — no correction needed.
  *
- * For Shapes, the bounding box includes padding for the stroke AND
- * for selection handles. This means the effect's local (0,0) is
- * offset from the position that modelView encodes. We compute the
- * exact offset by comparing the shape's position (its centre) to
- * the bounding box min corner returned by getItemBounds.
+ * For Shapes, two sources of offset exist:
  *
- * The offset is: position - bounds.min
- * This is in scene-space units and applied before the modelView
- * transform in the shader (as coordOffset).
+ *   1. VARIABLE: The bounding box includes the stroke width. We
+ *      measure this via getItemBounds(), comparing bounds.min to
+ *      the shape's centre position.
+ *
+ *   2. FIXED: The ATTACHMENT bounds extend beyond getItemBounds()
+ *      by a fixed scene-space padding (measured at ~49 units).
+ *      This appears to be OBR's internal padding for selection
+ *      handles / hit areas. It is constant regardless of stroke
+ *      width or viewport zoom.
+ *
+ * The total offset is -(boundsOffset + fixedPadding), applied in
+ * local coordinates before the modelView transform in the shader.
  */
+
+/**
+ * Fixed scene-space padding that the ATTACHMENT bounds extend beyond
+ * the value returned by getItemBounds(). Measured empirically at
+ * ~49 scene units across multiple stroke widths and zoom levels.
+ */
+const SHAPE_ATTACHMENT_PADDING = 49;
+
 async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
   if (isShape(item)) {
     try {
       const bounds = await OBR.scene.items.getItemBounds([item.id]);
-      // The bounding box min corner is where the effect's local (0,0) is.
-      // The item's position (centre) is where modelView maps (0,0) to.
-      // We need to shift local coords so that (0,0) + offset maps to the
-      // correct screen point via modelView.
       return {
-        x: -(item.position.x - bounds.min.x),
-        y: -(item.position.y - bounds.min.y),
+        x: -(item.position.x - bounds.min.x + SHAPE_ATTACHMENT_PADDING),
+        y: -(item.position.y - bounds.min.y + SHAPE_ATTACHMENT_PADDING),
       };
     } catch {
-      // Fallback if bounds query fails
       return { x: 0, y: 0 };
     }
   }
