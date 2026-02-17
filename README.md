@@ -9,9 +9,9 @@ Aurora gives you four intuitive controls:
 - **Hue**: overlay a colour tint (red for a burning city, blue for an underwater temple…)
 - **Opacity**: control how strong that tint is, from a subtle wash to a bold colour shift
 
-Mix and match these to create exactly the atmosphere you're after, then save your favourites as presets that persist across every Scene in the Room. 
+Mix and match these parameters to create exactly the atmosphere you're after, then save your favourites as presets that persist across every Scene in the Room.
 
-⚠️ NB. Aurora applies to *every* layer of the canvas, so if you have notes or other objects that you don't want to be colour-shifted, you can either place them outside ofthe affected area, or you can use the Drawing tools and the Trim function to make a custom mask with 'holes' for your notes and other objects to poke through unaffected!
+⚠️ *NB. Aurora applies to **every** layer of the canvas, so if you have notes or other objects that you don't want to be colour-shifted, you can either place them outside ofthe affected area, or you can use the Drawing tools and the Trim function to make a custom mask for Aurora - with 'holes' for your notes and other objects to poke through unaffected!*
 
 ---
 
