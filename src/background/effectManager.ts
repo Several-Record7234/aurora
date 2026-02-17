@@ -54,7 +54,7 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
     item.position.x, item.position.y,
     item.rotation,
     item.scale.x, item.scale.y,
-    item.visible,
+    item.visible, item.zIndex,
     item.type, strokeWidth, shapeW, shapeH,
   ].join("|");
 }
@@ -94,38 +94,35 @@ async function removeAllEffects(): Promise<void> {
  *      measure this via getItemBounds(), comparing bounds.min to
  *      the shape's centre position.
  *
- *   2. FIXED: The ATTACHMENT bounds extend beyond getItemBounds()
- *      by a fixed scene-space padding (measured at ~49 units).
- *      This appears to be OBR's internal padding for selection
- *      handles / hit areas. It is constant regardless of stroke
- *      width or viewport zoom.
+ *   2. FIXED: getItemBounds() returns a box LARGER than the actual
+ *      ATTACHMENT fill area (it includes selection handle padding
+ *      that the ATTACHMENT does not). We subtract this excess
+ *      (SHAPE_BOUNDS_EXCESS = 12 scene units per side) from the
+ *      bounds-derived offset.
  *
- * The total offset is -(boundsOffset + fixedPadding), applied in
- * local coordinates before the modelView transform in the shader.
+ * The total offset is -(boundsOffset - excess), applied in local
+ * coordinates before the modelView transform in the shader.
  */
 
 /**
- * Fixed scene-space padding that the ATTACHMENT bounds extend beyond
- * the value returned by getItemBounds(). Measured empirically at
- * ~49 scene units across multiple stroke widths and zoom levels.
+ * Scene-space correction between getItemBounds() and the actual
+ * ATTACHMENT fill area. getItemBounds() includes padding for
+ * selection handles that the ATTACHMENT system does NOT include,
+ * so this value is negative — we subtract the excess from the
+ * bounds-derived offset.
  *
- * DEV: Exposed on window.AURORA_PADDING for live tuning from the
- * dev console. Change the value, then toggle the effect off/on (or
- * nudge the shape) to trigger a reconcile with the new value.
+ * Measured empirically: getItemBounds() overshoots the ATTACHMENT
+ * origin by 12 scene units on each side.
  */
-let SHAPE_ATTACHMENT_PADDING = 49;
-(window as any).AURORA_PADDING = {
-  get value() { return SHAPE_ATTACHMENT_PADDING; },
-  set value(v: number) { SHAPE_ATTACHMENT_PADDING = v; },
-};
+const SHAPE_BOUNDS_EXCESS = 12;
 
 async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
   if (isShape(item)) {
     try {
       const bounds = await OBR.scene.items.getItemBounds([item.id]);
       return {
-        x: -(item.position.x - bounds.min.x + SHAPE_ATTACHMENT_PADDING),
-        y: -(item.position.y - bounds.min.y + SHAPE_ATTACHMENT_PADDING),
+        x: -(item.position.x - bounds.min.x - SHAPE_BOUNDS_EXCESS),
+        y: -(item.position.y - bounds.min.y - SHAPE_BOUNDS_EXCESS),
       };
     } catch {
       return { x: 0, y: 0 };
@@ -162,12 +159,19 @@ async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
  *    Required for access to the `uniform shader scene` built-in, which
  *    lets the shader sample the current rendered scene colour at each pixel.
  *
- * 5. disableAttachmentBehavior(["COPY"])
+ * 5. Z-INDEX: copied from parent.zIndex
+ *    The effect must render at the same z-order as its parent so that
+ *    scene reordering (e.g. moving items forward/backward on the MAP
+ *    layer) doesn't cause the shader to sample stale scene content.
+ *    The snapshot cache includes zIndex so that z-order changes on the
+ *    parent trigger an effect rebuild.
+ *
+ * 6. disableAttachmentBehavior(["COPY"])
  *    Local items (effects) must not be copied when the parent is duplicated;
  *    the effect manager will create new effects for any new items that have
  *    Aurora config in their metadata.
  *
- * 6. COORD OFFSET: passed as a shader uniform (see getCoordOffset)
+ * 7. COORD OFFSET: passed as a shader uniform (see getCoordOffset)
  *    Shapes include stroke width in their ATTACHMENT bounds, creating a
  *    small positional offset. The shader adds this offset to local coords
  *    before transforming to screen-space.
@@ -180,10 +184,10 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
     .rotation(parent.rotation)
     .scale(parent.scale)
     .visible(parent.visible)
+    .zIndex(parent.zIndex)
     .locked(true)
     .disableHit(true)
     .disableAttachmentBehavior(["COPY"])
-    .disableAutoZIndex(true)
     .build();
 
   // Set shader properties directly on the built object (not via builder)
@@ -191,7 +195,6 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
   effect.uniforms = getShaderUniforms(config, await getCoordOffset(parent));
 
   effect.layer = "POST_PROCESS";
-  effect.zIndex = 0;
 
   // Tag with metadata so we can find/manage this effect later
   effect.metadata = {
