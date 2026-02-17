@@ -1,4 +1,4 @@
-# <img src="public/icon.png" width="40" height="40" alt="Aurora icon"> Aurora — Colour Grading for Owlbear Rodeo
+# <img src="public/icon.png" width="40" height="40"> Aurora — Colour Grading for Owlbear Rodeo
 
 **Aurora** lets you transform the mood of your maps with real-time colour grading — right inside Owlbear Rodeo. Desaturate a dungeon into gloomy shadow, bathe a tavern in golden hour warmth, or wash a battlefield in eerie moonlight. It's all done with a GPU shader that runs directly on your map, so there's no image editing, no re-uploading, and changes happen instantly.
 
@@ -29,7 +29,7 @@ Then head to your **Owlbear Rodeo profile** → **Extensions** → **Add Extensi
 
 ### 2. Enable Aurora in Your Room
 
-Open the room where you want to use Aurora. Go to the **Extensions** panel and make sure Aurora is **toggled on** for that room. You should see the 🌅 Aurora icon appear in the top-left extension tray.
+Open the room where you want to use Aurora. Go to the **Extensions** panel and make sure Aurora is **toggled on** for that room. You should see the <img src="public/icon.png" width="25" height="25"> Aurora icon appear in the top-left extension tray.
 
 > ![Screenshot placeholder: Enabling Aurora in the room's extension list]
 
@@ -96,7 +96,7 @@ Presets are stored in the **room metadata**, so they're shared with every player
 
 ### 8. The Action Popover (Preset Library)
 
-Click the **🌅 Aurora** icon in the top-left extension tray to open the Action popover. This shows your **Preset Library** — a grid of all six preset slots with their names and current values.
+Click the **<img src="public/icon.png" width="40" height="40"> Aurora** icon in the top-left extension tray to open the Action popover. This shows your **Preset Library** — a grid of all six preset slots with their names and current values.
 
 From here you can get an overview of everything you've saved, and manage your library without needing to have a map item selected.
 
