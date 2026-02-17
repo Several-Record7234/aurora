@@ -1,3 +1,14 @@
+/**
+ * Aurora – action popover entry point (index.html).
+ *
+ * This is the UI shown when the user clicks the Aurora icon in the
+ * top-left extension tray. It displays the Preset Library: a 2×3 grid
+ * of saved colour-grading snapshots that can be renamed or cleared.
+ *
+ * Presets are read from and written to room metadata (via shared/presets.ts)
+ * so they are visible to all players in the room.
+ */
+
 import OBR from "@owlbear-rodeo/sdk";
 import {
   Presets,
@@ -7,17 +18,18 @@ import {
 } from "./shared/types";
 import { loadPresets, savePresets, clearPresetSlot, getPresetsKey } from "./shared/presets";
 
+// ── Constants ─────────────────────────────────────────────────────
+
+/** Dimensions of the action popover (pixels) */
+const POPOVER_WIDTH = 350;
+const POPOVER_HEIGHT = 420;
+
 // ── State ─────────────────────────────────────────────────────────
 
 let presets: Presets = [...EMPTY_PRESETS];
 
 /** Current interaction mode: null = idle, "rename" or "clear" = awaiting preset click */
 let activeMode: "rename" | "clear" | null = null;
-
-// ── Popover Sizing ────────────────────────────────────────────────
-
-const POPOVER_WIDTH = 350;
-const POPOVER_HEIGHT = 420;
 
 // ── DOM refs ──────────────────────────────────────────────────────
 

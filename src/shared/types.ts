@@ -1,3 +1,23 @@
+/**
+ * Aurora – shared type definitions.
+ *
+ * Defines the core data structures used across every Aurora iframe:
+ *   - HSLOValues:   colour-grading parameters (Saturation, Lightness, Hue, Opacity)
+ *   - AuroraConfig: per-item metadata (HSLO + enabled flag)
+ *   - Preset:       a saved HSLO snapshot with a user-facing name
+ *
+ * Field names are kept deliberately short (s, l, h, o, e, n) because they
+ * are serialised into Owlbear Rodeo metadata and transmitted over the wire.
+ *
+ * FIELD GLOSSARY:
+ *   s — Saturation   (0–200, 100 = no change)
+ *   l — Lightness    (0–200, 100 = no change)
+ *   h — Hue          (-180–180, degrees on the colour wheel)
+ *   o — Opacity      (0–100, tint overlay strength)
+ *   e — Enabled      (boolean toggle without losing slider values)
+ *   n — Name         (user-facing preset label)
+ */
+
 // ── HSLO Values ───────────────────────────────────────────────────
 
 /**
@@ -31,19 +51,22 @@ export const DEFAULT_CONFIG: AuroraConfig = {
 
 // ── Presets (stored in room metadata) ─────────────────────────────
 
+/** Maximum number of preset slots available in the library */
+export const MAX_PRESET_SLOTS = 6;
+
 export interface Preset extends HSLOValues {
   n: string; // Name
 }
 
 export type Presets = Array<Preset | null>;
 
-export const EMPTY_PRESETS: Presets = Array(6).fill(null);
+export const EMPTY_PRESETS: Presets = Array(MAX_PRESET_SLOTS).fill(null);
 export const MAX_NAME_LENGTH = 16;
 
 /**
  * Starter presets, written to room metadata the first time presets are
- * loaded in a room that has never used Aurora before. Slots 5–6 are
- * left empty so users have room to save their own immediately.
+ * loaded in a room that has never used Aurora before. The last two slots
+ * are left empty so users have room to save their own immediately.
  */
 export const DEFAULT_PRESETS: Presets = [
   { n: "Midnight",    s: 25,  l: 30, h: -99,  o: 9  },
@@ -68,6 +91,24 @@ export function isAuroraConfig(val: unknown): val is AuroraConfig {
   );
 }
 
+/**
+ * Validate that a value from room metadata is a well-formed Presets array.
+ *
+ * Each element must be either null (empty slot) or a valid Preset object
+ * with the correct field types. This prevents silent corruption if another
+ * extension or a metadata migration writes unexpected data to the key.
+ */
 export function isPresets(val: unknown): val is Presets {
-  return Array.isArray(val);
+  if (!Array.isArray(val)) return false;
+  return val.every(
+    (item) =>
+      item === null ||
+      (typeof item === "object" &&
+        item !== null &&
+        typeof (item as Record<string, unknown>).n === "string" &&
+        typeof (item as Record<string, unknown>).s === "number" &&
+        typeof (item as Record<string, unknown>).l === "number" &&
+        typeof (item as Record<string, unknown>).h === "number" &&
+        typeof (item as Record<string, unknown>).o === "number")
+  );
 }

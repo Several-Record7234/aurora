@@ -1,15 +1,54 @@
+/**
+ * Aurora – effect manager (background page).
+ *
+ * Watches for scene item changes and manages local POST_PROCESS shader
+ * effects that implement Aurora's colour grading. Each MAP-layer item
+ * with Aurora config metadata gets a corresponding local ATTACHMENT
+ * effect; when the config changes the effect is recreated, and when the
+ * config is removed the effect is cleaned up.
+ *
+ * PERFORMANCE NOTES:
+ *   - A config snapshot cache avoids recreating effects when nothing has
+ *     changed (the OBR onChange callback fires on every item mutation,
+ *     including drags and selections).
+ *   - All additions and deletions are batched into single SDK calls to
+ *     minimise round-trips and reduce visual flicker.
+ *   - The reconcile loop is wrapped in a try/catch so that a single
+ *     failed operation doesn't leave the effect set in an inconsistent
+ *     state.
+ */
+
 import OBR, { buildEffect, Effect, Item } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
 import { getShaderCode, getShaderUniforms } from "../shared/shader";
 import { AuroraConfig, isAuroraConfig } from "../shared/types";
 
+// ── Metadata Keys ─────────────────────────────────────────────────
+
 const CONFIG_KEY = getPluginId("config");
 const EFFECT_META_KEY = getPluginId("isEffect");
 
-/** Tag we store on local effects so we can link them back to their source item */
+/** Tag stored on local effects so we can link them back to their source item */
 function effectSourceKey(): string {
   return getPluginId("sourceItemId");
 }
+
+// ── Config Snapshot Cache ─────────────────────────────────────────
+//
+// Maps source-item ID → a JSON snapshot of the AuroraConfig that was
+// last used to create its effect. On each reconcile pass we compare the
+// current config against this snapshot; if they match we skip the item
+// entirely, avoiding needless delete-then-add cycles.
+
+const configCache = new Map<string, string>();
+
+/** Serialise an AuroraConfig to a stable string for comparison */
+function configSnapshot(config: AuroraConfig): string {
+  // Deterministic key order via explicit concatenation (faster than JSON.stringify)
+  return `${config.s}|${config.l}|${config.h}|${config.o}|${config.e}`;
+}
+
+// ── Effect Helpers ────────────────────────────────────────────────
 
 /** Find all local Aurora effects */
 async function findAllEffects(): Promise<Item[]> {
@@ -18,39 +57,30 @@ async function findAllEffects(): Promise<Item[]> {
   );
 }
 
-/** Remove the local effect for a specific source item */
-async function removeEffectForItem(itemId: string): Promise<void> {
-  const effects = await OBR.scene.local.getItems(
-    (item) => item.metadata[effectSourceKey()] === itemId
-  );
-  if (effects.length > 0) {
-    await OBR.scene.local.deleteItems(effects.map((e) => e.id));
-  }
-}
-
-/** Remove all Aurora effects (used on scene close) */
+/** Remove all Aurora effects and clear the cache (used on scene close) */
 async function removeAllEffects(): Promise<void> {
   const effects = await findAllEffects();
   if (effects.length > 0) {
     await OBR.scene.local.deleteItems(effects.map((e) => e.id));
   }
+  configCache.clear();
 }
 
 /**
  * Build an ATTACHMENT effect for a MAP-layer item.
  *
  * SUPPORTS ANY MAP-LAYER ITEM — not limited to IMAGE type.
- * This means drawings (rectangles, circles, etc.) moved to the MAP layer
- * can also have Aurora effects applied, matching the Weather extension's
- * behaviour of supporting any attachable item.
+ * Drawings (rectangles, circles, etc.) moved to the MAP layer can also
+ * have Aurora effects applied, matching the Weather extension's behaviour
+ * of supporting any attachable item.
  *
  * KEY IMPLEMENTATION NOTES:
  *
  * 1. POSITION: must be parent.position
  *    The shader uses the `modelView` built-in uniform, which combines the
- *    effect item's own model transform (including its position) with the
- *    viewport transform. For modelView to compute correct screen-space
- *    coordinates, the effect must know its actual position in the scene.
+ *    effect item's own model transform with the viewport transform. For
+ *    modelView to compute correct screen-space coordinates the effect
+ *    must know its actual position in the scene.
  *
  * 2. WIDTH/HEIGHT: not set
  *    ATTACHMENT effects auto-fill the parent item's display bounds.
@@ -60,9 +90,9 @@ async function removeAllEffects(): Promise<void> {
  *    lets the shader sample the current rendered scene colour at each pixel.
  *
  * 4. disableAttachmentBehavior(["COPY"])
- *    Local items (effects) must not be copied when the parent is duplicated,
- *    as the effect manager will create new effects for any new items that
- *    have Aurora config in their metadata.
+ *    Local items (effects) must not be copied when the parent is duplicated;
+ *    the effect manager will create new effects for any new items that have
+ *    Aurora config in their metadata.
  */
 function buildAuroraEffect(parent: Item, config: AuroraConfig): Effect {
   const effect = buildEffect()
@@ -93,57 +123,101 @@ function buildAuroraEffect(parent: Item, config: AuroraConfig): Effect {
   return effect;
 }
 
-/** Create or recreate the local effect for a MAP-layer item with Aurora config */
-async function syncEffectForItem(item: Item, config: AuroraConfig): Promise<void> {
-  // Remove existing effect first (recreate is simple and ensures fresh state)
-  await removeEffectForItem(item.id);
-
-  if (!config.e) {
-    // Disabled — just remove, don't recreate
-    return;
-  }
-
-  const effect = buildAuroraEffect(item, config);
-  await OBR.scene.local.addItems([effect]);
-}
+// ── Reconciliation ────────────────────────────────────────────────
 
 /**
  * Reconcile all Aurora effects with the current scene state.
  * Called on scene ready and whenever items change.
  *
- * Scans ALL items on the MAP layer (not just images) for Aurora config.
+ * Uses a config snapshot cache to skip items whose config hasn't changed
+ * since the last pass, and batches all SDK add/delete calls.
  */
 async function reconcileEffects(items: Item[]): Promise<void> {
-  const existingEffects = await findAllEffects();
+  try {
+    const existingEffects = await findAllEffects();
 
-  // Items that should have effects — any MAP-layer item with Aurora config
-  const auroraItems = new Map<string, { item: Item; config: AuroraConfig }>();
-  for (const item of items) {
-    if (item.layer === "MAP") {
-      const config = item.metadata[CONFIG_KEY];
-      if (isAuroraConfig(config)) {
-        auroraItems.set(item.id, { item, config });
+    // Build a lookup of existing effects by source item ID
+    const effectsBySource = new Map<string, Item>();
+    for (const e of existingEffects) {
+      const sourceId = e.metadata[effectSourceKey()] as string | undefined;
+      if (sourceId) {
+        effectsBySource.set(sourceId, e);
       }
     }
-  }
 
-  // Remove effects for items that no longer have Aurora config
-  const toRemove = existingEffects.filter(
-    (e) => !auroraItems.has(e.metadata[effectSourceKey()] as string)
-  );
-  if (toRemove.length > 0) {
-    await OBR.scene.local.deleteItems(toRemove.map((e) => e.id));
-  }
+    // Items that should have effects — any MAP-layer item with Aurora config
+    const auroraItems = new Map<string, { item: Item; config: AuroraConfig }>();
+    for (const item of items) {
+      if (item.layer === "MAP") {
+        const config = item.metadata[CONFIG_KEY];
+        if (isAuroraConfig(config)) {
+          auroraItems.set(item.id, { item, config });
+        }
+      }
+    }
 
-  // Create or update effects for items that have Aurora config
-  for (const [, { item, config }] of auroraItems) {
-    await syncEffectForItem(item, config);
+    // ── Determine which effects to remove ───────────────────────
+
+    const idsToRemove: string[] = [];
+
+    for (const [sourceId, effectItem] of effectsBySource) {
+      if (!auroraItems.has(sourceId)) {
+        // Source item no longer has Aurora config — remove its effect
+        idsToRemove.push(effectItem.id);
+        configCache.delete(sourceId);
+      }
+    }
+
+    // ── Determine which effects to create / recreate ────────────
+
+    const effectsToAdd: Effect[] = [];
+
+    for (const [itemId, { item, config }] of auroraItems) {
+      const snap = configSnapshot(config);
+      const cached = configCache.get(itemId);
+
+      if (cached === snap && effectsBySource.has(itemId)) {
+        // Config unchanged and effect already exists — skip
+        continue;
+      }
+
+      // Config changed or effect is missing — schedule removal of the
+      // old effect (if any) and creation of a new one
+      const existing = effectsBySource.get(itemId);
+      if (existing && !idsToRemove.includes(existing.id)) {
+        idsToRemove.push(existing.id);
+      }
+
+      if (config.e) {
+        effectsToAdd.push(buildAuroraEffect(item, config));
+      }
+
+      // Update cache (even for disabled configs, so we don't keep
+      // trying to recreate them on every reconcile)
+      configCache.set(itemId, snap);
+    }
+
+    // ── Execute batched SDK operations ──────────────────────────
+
+    if (idsToRemove.length > 0) {
+      await OBR.scene.local.deleteItems(idsToRemove);
+    }
+
+    if (effectsToAdd.length > 0) {
+      await OBR.scene.local.addItems(effectsToAdd);
+    }
+  } catch (err) {
+    console.error("Aurora: reconcileEffects failed, will retry on next change", err);
   }
 }
 
-/** Start the effect manager.
- *  Watches for scene item changes and manages local effects accordingly.
- *  Returns a cleanup function. */
+// ── Public API ────────────────────────────────────────────────────
+
+/**
+ * Start the effect manager.
+ * Watches for scene item changes and manages local effects accordingly.
+ * Returns a cleanup function.
+ */
 export function startEffectManager(): () => void {
   let unsubItems: (() => void) | null = null;
   let unsubReady: (() => void) | null = null;

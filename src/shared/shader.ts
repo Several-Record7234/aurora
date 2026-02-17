@@ -1,3 +1,19 @@
+/**
+ * Aurora – SkSL shader source and uniform helpers.
+ *
+ * Contains the colour-grading shader that runs as a POST_PROCESS
+ * ATTACHMENT effect on MAP-layer items, plus a helper to convert the
+ * UI-facing HSLO values into the uniform float array the shader expects.
+ *
+ * PROCESSING PIPELINE (see getShaderCode for full detail):
+ *   1. Sample the scene pixel at the correct screen-space coordinate
+ *   2. Adjust saturation (HSV S channel multiplier)
+ *   3. Adjust lightness  (HSV V channel multiplier)
+ *   4. Generate a flat tint from the Hue slider value
+ *   5. Blend the tint at Opacity strength
+ *   6. Output with original alpha preserved
+ */
+
 import type { HSLOValues } from "./types";
 
 /**

@@ -1,3 +1,15 @@
+/**
+ * Aurora – preset persistence helpers.
+ *
+ * Presets are stored in Owlbear Rodeo room metadata so they are shared
+ * across all players in the room and persist across sessions. On first
+ * access in a room that has never used Aurora, a set of starter presets
+ * is seeded into metadata; after that, user edits take precedence.
+ *
+ * Every function here reads or writes through OBR.room.getMetadata /
+ * setMetadata, which automatically syncs to all connected clients.
+ */
+
 import OBR from "@owlbear-rodeo/sdk";
 import { getPluginId } from "./pluginId";
 import { Presets, DEFAULT_PRESETS, isPresets, HSLOValues, MAX_NAME_LENGTH } from "./types";

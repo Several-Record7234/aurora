@@ -1,3 +1,16 @@
+/**
+ * Aurora – context-menu popover entry point (menu.html).
+ *
+ * Shown when the user right-clicks a MAP-layer item that already has
+ * Aurora config and selects "Aurora Settings". Provides per-item HSLO
+ * sliders, a master enabled toggle, preset loading/saving, and a
+ * "Remove Aurora" button.
+ *
+ * Reads and writes config to the selected item's metadata via OBR.scene.items.
+ * Also subscribes to external metadata changes so that edits made by
+ * other players are reflected in real time.
+ */
+
 import OBR from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
 import {
@@ -13,6 +26,9 @@ import {
 import { loadPresets, saveToPresetSlot, getPresetsKey } from "../shared/presets";
 
 const CONFIG_KEY = getPluginId("config");
+
+/** Delay (ms) before persisting slider changes to item metadata */
+const SAVE_DEBOUNCE_MS = 150;
 
 // ── DOM Elements ──────────────────────────────────────────────────
 
@@ -73,7 +89,7 @@ let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function debouncedSave() {
   if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => writeConfigToItems(), 150);
+  saveTimeout = setTimeout(() => writeConfigToItems(), SAVE_DEBOUNCE_MS);
 }
 
 // ── Item Config Read/Write ────────────────────────────────────────

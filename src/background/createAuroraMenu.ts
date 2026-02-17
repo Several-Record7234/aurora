@@ -1,15 +1,25 @@
+/**
+ * Aurora – context menu registration (background page).
+ *
+ * Registers two right-click context menu entries on MAP-layer items:
+ *
+ *   "Add Aurora"      — shown when the item has no Aurora metadata yet.
+ *                       Writes DEFAULT_CONFIG into the item's metadata,
+ *                       which the effect manager picks up on its next
+ *                       reconcile pass.
+ *
+ *   "Aurora Settings" — shown when the item already has Aurora metadata.
+ *                       Opens the embedded menu popover (menu.html) so
+ *                       the user can adjust HSLO sliders.
+ */
+
 import OBR from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
 import { DEFAULT_CONFIG } from "../shared/types";
 
-/** Register context menu items on MAP layer objects.
- *
- *  Two entries:
- *  1. "Add Aurora" — shown on MAP items without Aurora metadata.
- *     Writes default config into the item's metadata.
- *  2. "Aurora Settings" — shown on MAP items that already have Aurora metadata.
- *     Opens the embedded menu popover for HSLO control.
- */
+/** Popover height for the Aurora Settings embed (pixels) */
+const SETTINGS_EMBED_HEIGHT = 380;
+
 export function createAuroraMenu() {
   const CONFIG_KEY = getPluginId("config");
 
@@ -63,7 +73,7 @@ export function createAuroraMenu() {
     ],
     embed: {
       url: "/menu.html",
-      height: 380,
+      height: SETTINGS_EMBED_HEIGHT,
     },
   });
 }
