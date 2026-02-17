@@ -61,10 +61,10 @@ Presets are a huge time-saver, and a great starting point for your own adjustmen
 
 | Preset | Vibe |
 |--------|------|
-| **Midnight** | Deep desaturation with a cool blue-purple wash — perfect for nighttime encounters |
-| **Golden Hour** | Warm, slightly darkened tones with a golden tint — great for sunset scenes |
-| **Pre-Dawn** | Dimmed with a pale blue overlay — that quiet moment before the sun rises |
-| **Blood Moon** | Heavily desaturated and darkened with a red tint — ominous and foreboding |
+| **Midnight** | Deep desaturation with a cool blue-purple wash - perfect for nighttime encounters |
+| **Golden Hour** | Warm, slightly darkened tones with a golden tint - great for sunset scenes |
+| **Pre-Dawn** | Dimmed with a pale blue overlay - that quiet moment before the sun rises |
+| **Blood Moon** | Heavily desaturated and darkened with a red tint - ominous and foreboding |
 
 Plus there are two empty slots ready for your own creations.
 
