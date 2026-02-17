@@ -1,4 +1,4 @@
-# ![Aurora icon]<img src="public/icon.png" width="25" height="25"> Aurora — Colour Grading for Owlbear Rodeo
+# <img src="public/icon.png" width="40" height="40" alt="Aurora icon"> Aurora — Colour Grading for Owlbear Rodeo
 
 **Aurora** lets you transform the mood of your maps with real-time colour grading — right inside Owlbear Rodeo. Desaturate a dungeon into gloomy shadow, bathe a tavern in golden hour warmth, or wash a battlefield in eerie moonlight. It's all done with a GPU shader that runs directly on your map, so there's no image editing, no re-uploading, and changes happen instantly.
 
