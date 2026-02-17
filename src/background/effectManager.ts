@@ -98,66 +98,57 @@ async function removeAllEffects(): Promise<void> {
  *   2. FIXED: getItemBounds() returns a box LARGER than the actual
  *      ATTACHMENT fill area (it includes selection handle padding
  *      that the ATTACHMENT does not). We subtract this excess
- *      from the bounds-derived offset. The excess value differs
- *      by shape type because different shapes have different
- *      internal origin/anchor conventions.
+ *      from the bounds-derived offset.
  *
- * The total offset is -(boundsOffset - excess), applied in local
- * coordinates before the modelView transform in the shader.
+ * Different shape types have different internal origins relative to
+ * their bounding box. We apply per-shape-type corrections expressed
+ * as multipliers of the shape's width and height, plus the common
+ * bounds excess.
  *
- * SHAPE-SPECIFIC CORRECTIONS (measured empirically):
- *   RECTANGLE:  getItemBounds() overshoots by 12 scene units per side
- *   CIRCLE:     getItemBounds() overshoots differently due to the
- *               ellipse origin being at the top-left of its bounding
- *               box rather than centre; needs width/height correction
- *   Others:     Fall back to rectangle value (may need tuning)
+ * SHAPE ORIGIN CORRECTIONS (measured empirically):
+ *   RECTANGLE: origin at centre — no dimension correction needed
+ *   CIRCLE:    origin at top-left of bounding ellipse — +1× w/h
+ *   TRIANGLE:  origin at top-left of bounding box — +1× w/h
+ *   HEXAGON:   pointy-top; x = flat-to-flat distance, y = point-to-point
+ *   PENTAGON:  TBD (defaulting to +1× w/h, needs measurement)
+ *   STAR:      TBD (defaulting to +1× w/h, needs measurement)
  *
- * DEV: Exposed on window.AURORA_OFFSETS for live tuning. Change
- * values, then toggle the effect or nudge the shape to trigger
- * a reconcile.
+ * DEV: Exposed on window.AURORA_SHAPE_CORRECTIONS for live tuning.
+ * Each entry has { excess, mx, my } where:
+ *   excess = bounds excess subtracted per side (handle padding)
+ *   mx = multiplier for item.width added to x offset
+ *   my = multiplier for item.height added to y offset
+ * Change values, then toggle the effect or nudge the shape to
+ * trigger a reconcile.
  */
 
-/**
- * Per-shape-type bounds excess corrections.
- * Each value is subtracted from the getItemBounds()-derived offset.
- *
- * For shapes whose origin is at the geometric centre (rectangles),
- * the excess is a small fixed value (handle padding).
- *
- * For shapes whose internal origin differs (circles/ellipses use
- * top-left), the correction includes the shape dimensions — these
- * are handled dynamically in getCoordOffset rather than as constants.
- */
-const SHAPE_OFFSETS: Record<string, number> = {
-  RECTANGLE: 12,
-  CIRCLE: 12,   // Base excess (same handle padding); dimension correction added dynamically
-  TRIANGLE: 12,
-  HEXAGON: 12,
-  PENTAGON: 12,
-  STAR: 12,
+interface ShapeCorrection {
+  excess: number;  // Bounds excess to subtract (handle padding)
+  mx: number;      // Width multiplier for x offset
+  my: number;      // Height multiplier for y offset
+}
+
+const SHAPE_CORRECTIONS: Record<string, ShapeCorrection> = {
+  RECTANGLE: { excess: 12, mx: 0,   my: 0   },
+  CIRCLE:    { excess: 12, mx: 1,   my: 1   },
+  TRIANGLE:  { excess: 12, mx: 1,   my: 1   },
+  HEXAGON:   { excess: 12, mx: 0.866, my: 1 },  // sqrt(3)/2 ≈ 0.866 for flat-to-flat
+  PENTAGON:  { excess: 12, mx: 1,   my: 1   },   // TBD — needs measurement
+  STAR:      { excess: 12, mx: 1,   my: 1   },   // TBD — needs measurement
 };
 
 // DEV: expose for live tuning from the dev console
-(window as any).AURORA_OFFSETS = SHAPE_OFFSETS;
+(window as any).AURORA_SHAPE_CORRECTIONS = SHAPE_CORRECTIONS;
 
 async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
   if (isShape(item)) {
     try {
       const bounds = await OBR.scene.items.getItemBounds([item.id]);
       const shapeType = item.shapeType ?? "RECTANGLE";
-      const excess = SHAPE_OFFSETS[shapeType] ?? SHAPE_OFFSETS.RECTANGLE;
+      const corr = SHAPE_CORRECTIONS[shapeType] ?? SHAPE_CORRECTIONS.RECTANGLE;
 
-      let ox = -(item.position.x - bounds.min.x - excess);
-      let oy = -(item.position.y - bounds.min.y - excess);
-
-      // Circles/ellipses: OBR positions them by top-left of the
-      // bounding ellipse, not by centre. The modelView still maps
-      // from the item's position, so we need an additional shift
-      // of (width, height) to compensate for the origin difference.
-      if (shapeType === "CIRCLE") {
-        ox += item.width;
-        oy += item.height;
-      }
+      const ox = -(item.position.x - bounds.min.x - corr.excess) + corr.mx * item.width;
+      const oy = -(item.position.y - bounds.min.y - corr.excess) + corr.my * item.height;
 
       return { x: ox, y: oy };
     } catch {
