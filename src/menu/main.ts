@@ -102,7 +102,8 @@ async function readConfigFromItems(): Promise<AuroraConfig> {
     const config = item.metadata[CONFIG_KEY];
     if (isAuroraConfig(config)) {
       // Ensure backwards compatibility: older configs may lack blend mode
-      return { b: 0, ...config };
+      const withDefaults: AuroraConfig = { ...config, b: config.b ?? 0 };
+      return withDefaults;
     }
   }
   return { ...DEFAULT_CONFIG };
@@ -454,7 +455,7 @@ OBR.onReady(async () => {
     for (const item of relevant) {
       const config = item.metadata[CONFIG_KEY];
       if (isAuroraConfig(config)) {
-        currentConfig = { b: 0, ...config };
+        currentConfig = { ...config, b: config.b ?? 0 };
         updateUI();
         break;
       }
