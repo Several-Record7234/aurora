@@ -47,13 +47,15 @@ const snapshotCache = new Map<string, string>();
 /** Serialise Aurora config + parent transform into a stable comparison key */
 function effectSnapshot(config: AuroraConfig, item: Item): string {
   const strokeWidth = isShape(item) ? (item.style.strokeWidth ?? 0) : 0;
+  const shapeW = isShape(item) ? item.width : 0;
+  const shapeH = isShape(item) ? item.height : 0;
   return [
     config.s, config.l, config.h, config.o, config.e, config.b ?? 0,
     item.position.x, item.position.y,
     item.rotation,
     item.scale.x, item.scale.y,
     item.visible,
-    item.type, strokeWidth,
+    item.type, strokeWidth, shapeW, shapeH,
   ].join("|");
 }
 
@@ -82,20 +84,35 @@ async function removeAllEffects(): Promise<void> {
  * mapping for non-image items.
  *
  * BACKGROUND:
- * When an ATTACHMENT effect fills a Shape's bounds, the bounding box
- * includes the stroke width (strokeWidth / 2 on each side). This means
- * the effect's local coordinate (0,0) is offset from the geometric
- * top-left of the shape by half the stroke width. Without correction
- * the shader samples scene pixels at a slight offset — visibly shifted
- * to the right and downwards.
+ * For ATTACHMENT effects, the effect's local coordinate (0,0) corresponds
+ * to the top-left corner of the parent's bounding box. The `modelView`
+ * matrix is built from the effect's own transform (which we copy from
+ * the parent).
  *
- * For Images this is not needed: the ATTACHMENT auto-fill correctly
- * accounts for the image's own grid.offset, so we return {0,0}.
+ * IMAGES: position refers to a point defined by grid.offset (typically
+ * the image centre). The ATTACHMENT system accounts for this, so the
+ * modelView transform and the bounding-box origin align correctly.
+ * No offset needed.
+ *
+ * SHAPES: position refers to the geometric centre. The bounding box
+ * extends outward by (width/2 + halfStroke) in each direction. The
+ * effect's local (0,0) is therefore offset from the position by
+ * -(width/2 + halfStroke) in both axes. We need to compensate so
+ * that the shader samples the scene at the correct screen location.
+ *
+ * The offset is applied in local (pre-transform) coordinates in the
+ * shader as: coord + coordOffset, before the modelView multiplication.
  */
 function getCoordOffset(item: Item): { x: number; y: number } {
   if (isShape(item)) {
     const halfStroke = (item.style.strokeWidth ?? 0) / 2;
-    return { x: halfStroke, y: halfStroke };
+    // Shape bounding box extends (width/2 + halfStroke) from centre.
+    // The effect's local (0,0) is at the top-left of that box, but
+    // modelView is centred on position. Shift local coords so (0,0)
+    // maps to the correct screen-space point.
+    const ox = -(item.width / 2 + halfStroke);
+    const oy = -(item.height / 2 + halfStroke);
+    return { x: ox, y: oy };
   }
   return { x: 0, y: 0 };
 }
