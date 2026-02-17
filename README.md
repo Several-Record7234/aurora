@@ -70,7 +70,7 @@ Plus there are two empty slots ready for your own creations.
 
 ### 5. Load a Preset
 
-In the **Aurora Settings** popover, use the **Load Preset…** dropdown to pick any saved preset. The sliders snap to those values instantly — it's a great way to audition different moods or use a preset as a starting point before fine-tuning.
+In the **Aurora Settings** popover, use the **Load Preset…** dropdown to pick any saved preset. The sliders snap to those values instantly - it's a great way to audition different moods or use a preset as a starting point before fine-tuning.
 
 > ![Screenshot placeholder: Selecting a preset from the dropdown]
 
