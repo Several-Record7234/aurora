@@ -49,13 +49,14 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
   const strokeWidth = isShape(item) ? (item.style.strokeWidth ?? 0) : 0;
   const shapeW = isShape(item) ? item.width : 0;
   const shapeH = isShape(item) ? item.height : 0;
+  const shapeType = isShape(item) ? item.shapeType : "";
   return [
     config.s, config.l, config.h, config.o, config.e, config.b ?? 0,
     item.position.x, item.position.y,
     item.rotation,
     item.scale.x, item.scale.y,
     item.visible, item.zIndex,
-    item.type, strokeWidth, shapeW, shapeH,
+    item.type, shapeType, strokeWidth, shapeW, shapeH,
   ].join("|");
 }
 
@@ -97,33 +98,68 @@ async function removeAllEffects(): Promise<void> {
  *   2. FIXED: getItemBounds() returns a box LARGER than the actual
  *      ATTACHMENT fill area (it includes selection handle padding
  *      that the ATTACHMENT does not). We subtract this excess
- *      (SHAPE_BOUNDS_EXCESS = 12 scene units per side) from the
- *      bounds-derived offset.
+ *      from the bounds-derived offset. The excess value differs
+ *      by shape type because different shapes have different
+ *      internal origin/anchor conventions.
  *
  * The total offset is -(boundsOffset - excess), applied in local
  * coordinates before the modelView transform in the shader.
+ *
+ * SHAPE-SPECIFIC CORRECTIONS (measured empirically):
+ *   RECTANGLE:  getItemBounds() overshoots by 12 scene units per side
+ *   CIRCLE:     getItemBounds() overshoots differently due to the
+ *               ellipse origin being at the top-left of its bounding
+ *               box rather than centre; needs width/height correction
+ *   Others:     Fall back to rectangle value (may need tuning)
+ *
+ * DEV: Exposed on window.AURORA_OFFSETS for live tuning. Change
+ * values, then toggle the effect or nudge the shape to trigger
+ * a reconcile.
  */
 
 /**
- * Scene-space correction between getItemBounds() and the actual
- * ATTACHMENT fill area. getItemBounds() includes padding for
- * selection handles that the ATTACHMENT system does NOT include,
- * so this value is negative — we subtract the excess from the
- * bounds-derived offset.
+ * Per-shape-type bounds excess corrections.
+ * Each value is subtracted from the getItemBounds()-derived offset.
  *
- * Measured empirically: getItemBounds() overshoots the ATTACHMENT
- * origin by 12 scene units on each side.
+ * For shapes whose origin is at the geometric centre (rectangles),
+ * the excess is a small fixed value (handle padding).
+ *
+ * For shapes whose internal origin differs (circles/ellipses use
+ * top-left), the correction includes the shape dimensions — these
+ * are handled dynamically in getCoordOffset rather than as constants.
  */
-const SHAPE_BOUNDS_EXCESS = 12;
+const SHAPE_OFFSETS: Record<string, number> = {
+  RECTANGLE: 12,
+  CIRCLE: 12,   // Base excess (same handle padding); dimension correction added dynamically
+  TRIANGLE: 12,
+  HEXAGON: 12,
+  PENTAGON: 12,
+  STAR: 12,
+};
+
+// DEV: expose for live tuning from the dev console
+(window as any).AURORA_OFFSETS = SHAPE_OFFSETS;
 
 async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
   if (isShape(item)) {
     try {
       const bounds = await OBR.scene.items.getItemBounds([item.id]);
-      return {
-        x: -(item.position.x - bounds.min.x - SHAPE_BOUNDS_EXCESS),
-        y: -(item.position.y - bounds.min.y - SHAPE_BOUNDS_EXCESS),
-      };
+      const shapeType = item.shapeType ?? "RECTANGLE";
+      const excess = SHAPE_OFFSETS[shapeType] ?? SHAPE_OFFSETS.RECTANGLE;
+
+      let ox = -(item.position.x - bounds.min.x - excess);
+      let oy = -(item.position.y - bounds.min.y - excess);
+
+      // Circles/ellipses: OBR positions them by top-left of the
+      // bounding ellipse, not by centre. The modelView still maps
+      // from the item's position, so we need an additional shift
+      // of (width, height) to compensate for the origin difference.
+      if (shapeType === "CIRCLE") {
+        ox += item.width;
+        oy += item.height;
+      }
+
+      return { x: ox, y: oy };
     } catch {
       return { x: 0, y: 0 };
     }
