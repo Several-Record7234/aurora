@@ -57,11 +57,10 @@ export function getShaderUniforms(config: AuroraConfig, coordOffset: { x: number
  * Saturation and Lightness are both at 100% the effect is a pure pass-through.
  *
  * BLEND MODES:
- *   0 = Normal    — flat replacement (original behaviour)
- *   1 = Multiply  — darkens; good for shadows and night
- *   2 = Screen    — lightens; good for glows and ethereal effects
- *   3 = Overlay   — contrast boost; darkens darks, lightens lights
- *   4 = Soft Light — subtle contrast; natural-looking tints
+ *   0 = Multiply   — darkens; good for shadows and night
+ *   1 = Overlay    — contrast boost; darkens darks, lightens lights
+ *   2 = Soft Light — subtle contrast; natural-looking tints
+ *   3 = Color      — applies tint hue/saturation, preserves scene luminosity
  *
  * COORDINATE NOTES (see also effectManager.ts):
  *   - Uses `modelView` (not `view`) for ATTACHMENT effects — combines the
@@ -104,10 +103,6 @@ export function getShaderCode(): string {
       return base * blend;
     }
 
-    vec3 blendScreen(vec3 base, vec3 blend) {
-      return 1.0 - (1.0 - base) * (1.0 - blend);
-    }
-
     vec3 blendOverlay(vec3 base, vec3 blend) {
       return mix(
         2.0 * base * blend,
@@ -130,6 +125,14 @@ export function getShaderCode(): string {
       );
     }
 
+    vec3 blendColor(vec3 base, vec3 blend) {
+      // "Color" blend: take hue and saturation from the tint,
+      // but preserve the luminosity (V channel) of the base.
+      vec3 blendHSV = rgb2hsv(blend);
+      vec3 baseHSV = rgb2hsv(base);
+      return hsv2rgb(vec3(blendHSV.x, blendHSV.y, baseHSV.z));
+    }
+
     half4 main(vec2 coord) {
       // Apply coordinate offset to compensate for shape stroke bounds,
       // then transform from item-local coords to screen-space pixels
@@ -150,11 +153,11 @@ export function getShaderCode(): string {
 
       // Select blend mode (using step comparisons since SkSL int uniforms
       // can be unreliable; float comparison is robust across GPU backends)
-      vec3 blended = tint; // mode 0: Normal (flat replacement)
-      blended = mix(blended, blendMultiply(adjusted, tint),  step(0.5, blendMode) * step(blendMode, 1.5));
-      blended = mix(blended, blendScreen(adjusted, tint),    step(1.5, blendMode) * step(blendMode, 2.5));
-      blended = mix(blended, blendOverlay(adjusted, tint),   step(2.5, blendMode) * step(blendMode, 3.5));
-      blended = mix(blended, blendSoftLight(adjusted, tint), step(3.5, blendMode));
+      //   0 = Multiply, 1 = Overlay, 2 = Soft Light, 3 = Color
+      vec3 blended = blendMultiply(adjusted, tint);
+      blended = mix(blended, blendOverlay(adjusted, tint),   step(0.5, blendMode) * step(blendMode, 1.5));
+      blended = mix(blended, blendSoftLight(adjusted, tint), step(1.5, blendMode) * step(blendMode, 2.5));
+      blended = mix(blended, blendColor(adjusted, tint),     step(2.5, blendMode));
 
       vec3 final = mix(adjusted, blended, opacity);
 

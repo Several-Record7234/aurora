@@ -26,11 +26,10 @@
  * The numeric index is stored in config and passed to the shader as a float uniform.
  */
 export const BLEND_MODES = [
-  { label: "Normal",     value: 0 },
-  { label: "Multiply",   value: 1 },
-  { label: "Screen",     value: 2 },
-  { label: "Overlay",    value: 3 },
-  { label: "Soft Light", value: 4 },
+  { label: "Multiply",   value: 0 },
+  { label: "Overlay",    value: 1 },
+  { label: "Soft Light", value: 2 },
+  { label: "Color",      value: 3 },
 ] as const;
 
 export type BlendModeValue = (typeof BLEND_MODES)[number]["value"];
