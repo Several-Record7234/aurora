@@ -1,6 +1,6 @@
-# <img src="public/icon.png" width="40" height="40"> Aurora: Time-of-day modification for Owlbear Rodeo
+# <img src="public/icon.png" width="40" height="40"> Aurora: Time-Of-Day Lighting for Owlbear Rodeo
 
-**Aurora** lets you transform the mood of your maps with real-time 'colour grading' - right inside Owlbear Rodeo. Desaturate a forest glade into gloomy shadow, bathe a tavern in golden hour warmth, or wash a battlefield in eerie moonlight. It's all done with a GPU shader that runs directly on your map, so there's no image editing, no re-uploading, and changes can be seen instantly.
+**Aurora** lets you transform the mood of your maps with real-time 'colour grading' - right inside Owlbear Rodeo. Desaturate a forest glade into gloomy shadow, bathe a tavern in golden-hour warmth, or wash a battlefield in eerie moonlight. It's all done with a GPU shader that runs directly on your map, so there's no image editing, no re-uploading, and changes can be seen instantly.
 
 Aurora gives you four intuitive controls:
 
