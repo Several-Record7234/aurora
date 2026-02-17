@@ -18,7 +18,7 @@
  *     state.
  */
 
-import OBR, { buildEffect, Effect, Item } from "@owlbear-rodeo/sdk";
+import OBR, { buildEffect, Effect, Item, isShape } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
 import { getShaderCode, getShaderUniforms } from "../shared/shader";
 import { AuroraConfig, isAuroraConfig } from "../shared/types";
@@ -46,12 +46,14 @@ const snapshotCache = new Map<string, string>();
 
 /** Serialise Aurora config + parent transform into a stable comparison key */
 function effectSnapshot(config: AuroraConfig, item: Item): string {
+  const strokeWidth = isShape(item) ? (item.style.strokeWidth ?? 0) : 0;
   return [
-    config.s, config.l, config.h, config.o, config.e,
+    config.s, config.l, config.h, config.o, config.e, config.b ?? 0,
     item.position.x, item.position.y,
     item.rotation,
     item.scale.x, item.scale.y,
     item.visible,
+    item.type, strokeWidth,
   ].join("|");
 }
 
@@ -71,6 +73,31 @@ async function removeAllEffects(): Promise<void> {
     await OBR.scene.local.deleteItems(effects.map((e) => e.id));
   }
   snapshotCache.clear();
+}
+
+// ── Coordinate Offset ─────────────────────────────────────────────
+
+/**
+ * Compute a coordinate offset to correct the shader's screen-space
+ * mapping for non-image items.
+ *
+ * BACKGROUND:
+ * When an ATTACHMENT effect fills a Shape's bounds, the bounding box
+ * includes the stroke width (strokeWidth / 2 on each side). This means
+ * the effect's local coordinate (0,0) is offset from the geometric
+ * top-left of the shape by half the stroke width. Without correction
+ * the shader samples scene pixels at a slight offset — visibly shifted
+ * to the right and downwards.
+ *
+ * For Images this is not needed: the ATTACHMENT auto-fill correctly
+ * accounts for the image's own grid.offset, so we return {0,0}.
+ */
+function getCoordOffset(item: Item): { x: number; y: number } {
+  if (isShape(item)) {
+    const halfStroke = (item.style.strokeWidth ?? 0) / 2;
+    return { x: halfStroke, y: halfStroke };
+  }
+  return { x: 0, y: 0 };
 }
 
 /**
@@ -105,6 +132,11 @@ async function removeAllEffects(): Promise<void> {
  *    Local items (effects) must not be copied when the parent is duplicated;
  *    the effect manager will create new effects for any new items that have
  *    Aurora config in their metadata.
+ *
+ * 6. COORD OFFSET: passed as a shader uniform (see getCoordOffset)
+ *    Shapes include stroke width in their ATTACHMENT bounds, creating a
+ *    small positional offset. The shader adds this offset to local coords
+ *    before transforming to screen-space.
  */
 function buildAuroraEffect(parent: Item, config: AuroraConfig): Effect {
   const effect = buildEffect()
@@ -122,7 +154,7 @@ function buildAuroraEffect(parent: Item, config: AuroraConfig): Effect {
 
   // Set shader properties directly on the built object (not via builder)
   effect.sksl = getShaderCode();
-  effect.uniforms = getShaderUniforms(config);
+  effect.uniforms = getShaderUniforms(config, getCoordOffset(parent));
 
   effect.layer = "POST_PROCESS";
   effect.zIndex = 0;

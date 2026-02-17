@@ -3,10 +3,10 @@
  *
  * Defines the core data structures used across every Aurora iframe:
  *   - HSLOValues:   colour-grading parameters (Saturation, Lightness, Hue, Opacity)
- *   - AuroraConfig: per-item metadata (HSLO + enabled flag)
+ *   - AuroraConfig: per-item metadata (HSLO + enabled flag + blend mode)
  *   - Preset:       a saved HSLO snapshot with a user-facing name
  *
- * Field names are kept deliberately short (s, l, h, o, e, n) because they
+ * Field names are kept deliberately short (s, l, h, o, e, b, n) because they
  * are serialised into Owlbear Rodeo metadata and transmitted over the wire.
  *
  * FIELD GLOSSARY:
@@ -15,8 +15,25 @@
  *   h — Hue          (-180–180, degrees on the colour wheel)
  *   o — Opacity      (0–100, tint overlay strength)
  *   e — Enabled      (boolean toggle without losing slider values)
+ *   b — Blend mode   (0–4, index into BLEND_MODES)
  *   n — Name         (user-facing preset label)
  */
+
+// ── Blend Modes ───────────────────────────────────────────────────
+
+/**
+ * Available tint blend modes.
+ * The numeric index is stored in config and passed to the shader as a float uniform.
+ */
+export const BLEND_MODES = [
+  { label: "Normal",     value: 0 },
+  { label: "Multiply",   value: 1 },
+  { label: "Screen",     value: 2 },
+  { label: "Overlay",    value: 3 },
+  { label: "Soft Light", value: 4 },
+] as const;
+
+export type BlendModeValue = (typeof BLEND_MODES)[number]["value"];
 
 // ── HSLO Values ───────────────────────────────────────────────────
 
@@ -39,6 +56,7 @@ export interface HSLOValues {
 /** Stored under getPluginId("config") on each map-layer item */
 export interface AuroraConfig extends HSLOValues {
   e: boolean; // Enabled (allows toggling without losing values)
+  b: number;  // Blend mode index (see BLEND_MODES)
 }
 
 export const DEFAULT_CONFIG: AuroraConfig = {
@@ -47,6 +65,7 @@ export const DEFAULT_CONFIG: AuroraConfig = {
   h: 0,
   o: 0,
   e: true,
+  b: 0,
 };
 
 // ── Presets (stored in room metadata) ─────────────────────────────
@@ -88,6 +107,8 @@ export function isAuroraConfig(val: unknown): val is AuroraConfig {
     typeof obj.h === "number" &&
     typeof obj.o === "number" &&
     typeof obj.e === "boolean"
+    // b is optional for backwards compatibility — older configs without it
+    // default to 0 (Normal) in getShaderUniforms
   );
 }
 

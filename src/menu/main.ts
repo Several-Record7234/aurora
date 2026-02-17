@@ -1,14 +1,10 @@
 /**
- * Aurora – context-menu popover entry point (menu.html).
+ * Aurora – context-menu popover (per-item settings).
  *
- * Shown when the user right-clicks a MAP-layer item that already has
- * Aurora config and selects "Aurora Settings". Provides per-item HSLO
- * sliders, a master enabled toggle, preset loading/saving, and a
- * "Remove Aurora" button.
- *
- * Reads and writes config to the selected item's metadata via OBR.scene.items.
- * Also subscribes to external metadata changes so that edits made by
- * other players are reflected in real time.
+ * This script runs inside the embedded popover that appears when the user
+ * right-clicks a MAP-layer item that already has Aurora config and selects
+ * "Aurora Settings". It provides real-time HSLO sliders, a blend mode
+ * dropdown, preset load/save, and a toggle to enable/disable the effect.
  */
 
 import OBR from "@owlbear-rodeo/sdk";
@@ -22,12 +18,13 @@ import {
   DEFAULT_CONFIG,
   MAX_NAME_LENGTH,
   EMPTY_PRESETS,
+  BLEND_MODES,
 } from "../shared/types";
 import { loadPresets, saveToPresetSlot, getPresetsKey } from "../shared/presets";
 
 const CONFIG_KEY = getPluginId("config");
 
-/** Delay (ms) before persisting slider changes to item metadata */
+/** Debounce delay for writing slider changes to item metadata (ms) */
 const SAVE_DEBOUNCE_MS = 150;
 
 // ── DOM Elements ──────────────────────────────────────────────────
@@ -42,6 +39,7 @@ interface UIElements {
   lightValue: HTMLElement;
   hueValue: HTMLElement;
   opacityValue: HTMLElement;
+  blendSelect: HTMLSelectElement;
   presetSelect: HTMLSelectElement;
   savePresetBtn: HTMLButtonElement;
   removeBtn: HTMLButtonElement;
@@ -57,6 +55,7 @@ function resolveUI(): UIElements | null {
   const lightValue = document.getElementById("lightValue");
   const hueValue = document.getElementById("hueValue");
   const opacityValue = document.getElementById("opacityValue");
+  const blendSelect = document.getElementById("blendSelect") as HTMLSelectElement | null;
   const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement | null;
   const savePresetBtn = document.getElementById("savePresetBtn") as HTMLButtonElement | null;
   const removeBtn = document.getElementById("removeBtn") as HTMLButtonElement | null;
@@ -64,7 +63,7 @@ function resolveUI(): UIElements | null {
   if (
     !toggle || !satSlider || !lightSlider || !hueSlider || !opacitySlider ||
     !satValue || !lightValue || !hueValue || !opacityValue ||
-    !presetSelect || !savePresetBtn || !removeBtn
+    !blendSelect || !presetSelect || !savePresetBtn || !removeBtn
   ) {
     return null;
   }
@@ -72,7 +71,7 @@ function resolveUI(): UIElements | null {
   return {
     toggle, satSlider, lightSlider, hueSlider, opacitySlider,
     satValue, lightValue, hueValue, opacityValue,
-    presetSelect, savePresetBtn, removeBtn,
+    blendSelect, presetSelect, savePresetBtn, removeBtn,
   };
 }
 
@@ -102,7 +101,8 @@ async function readConfigFromItems(): Promise<AuroraConfig> {
   for (const item of items) {
     const config = item.metadata[CONFIG_KEY];
     if (isAuroraConfig(config)) {
-      return config;
+      // Ensure backwards compatibility: older configs may lack blend mode
+      return { b: 0, ...config };
     }
   }
   return { ...DEFAULT_CONFIG };
@@ -134,8 +134,7 @@ async function removeAuroraFromItems(): Promise<void> {
 
 /**
  * Convert a hue degree value (-180..180) to a CSS hsl() colour string
- * for the slider track background. Uses moderate saturation and lightness
- * so the colour is clearly visible against the grey UI but not garish.
+ * for the slider track background.
  */
 function hueToTrackColor(hueDegrees: number): string {
   const cssHue = ((hueDegrees % 360) + 360) % 360;
@@ -166,6 +165,20 @@ function findMatchingPreset(): number {
   );
 }
 
+// ── Blend Mode Dropdown ───────────────────────────────────────────
+
+/** Populate the blend mode dropdown from the BLEND_MODES constant */
+function populateBlendModes() {
+  if (!ui) return;
+  ui.blendSelect.innerHTML = "";
+  for (const mode of BLEND_MODES) {
+    const option = document.createElement("option");
+    option.value = mode.value.toString();
+    option.textContent = mode.label;
+    ui.blendSelect.appendChild(option);
+  }
+}
+
 // ── UI Updates ────────────────────────────────────────────────────
 
 function updateUI() {
@@ -182,6 +195,9 @@ function updateUI() {
   ui.lightValue.textContent = `${currentConfig.l}%`;
   ui.hueValue.textContent = `${currentConfig.h}\u00B0`;
   ui.opacityValue.textContent = `${currentConfig.o}%`;
+
+  // Blend mode
+  ui.blendSelect.value = (currentConfig.b ?? 0).toString();
 
   // Toggle
   ui.toggle.classList.toggle("active", currentConfig.e);
@@ -276,6 +292,13 @@ function setupEventListeners() {
     slider.addEventListener("change", debouncedSave);
   }
 
+  // Blend mode dropdown
+  ui.blendSelect.addEventListener("change", async () => {
+    if (!ui) return;
+    currentConfig.b = parseInt(ui.blendSelect.value, 10);
+    await writeConfigToItems();
+  });
+
   // Preset select — immediately apply the selected preset
   ui.presetSelect.addEventListener("change", async () => {
     if (!ui) return;
@@ -288,8 +311,12 @@ function setupEventListeners() {
     const preset = presets[index];
     if (!preset) return;
 
-    // Apply preset values (S, L, H, O), keeping the current enabled state
-    currentConfig = { s: preset.s, l: preset.l, h: preset.h, o: preset.o, e: currentConfig.e };
+    // Apply preset values (S, L, H, O), keeping current enabled state and blend mode
+    currentConfig = {
+      s: preset.s, l: preset.l, h: preset.h, o: preset.o,
+      e: currentConfig.e,
+      b: currentConfig.b,
+    };
     updateUI();
     await writeConfigToItems();
   });
@@ -403,6 +430,9 @@ OBR.onReady(async () => {
     return;
   }
 
+  // Populate the blend mode dropdown from the shared constant
+  populateBlendModes();
+
   // Get the currently selected items
   const selection = await OBR.player.getSelection();
   selectedItemIds = selection ?? [];
@@ -424,7 +454,7 @@ OBR.onReady(async () => {
     for (const item of relevant) {
       const config = item.metadata[CONFIG_KEY];
       if (isAuroraConfig(config)) {
-        currentConfig = config;
+        currentConfig = { b: 0, ...config };
         updateUI();
         break;
       }

@@ -179,6 +179,31 @@
       transition: background 0.1s;
     }
 
+    /* ── Blend Mode Select ───────────────── */
+
+    .blend-group {
+      margin-bottom: 8px;
+    }
+
+    .blend-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .blend-select {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      background: white;
+      color: #333;
+    }
+
     /* ── Divider ─────────────────────────── */
 
     .divider {
@@ -314,7 +339,7 @@
       <input type="range" id="lightSlider" min="0" max="200" value="100">
     </div>
 
-    <!-- 4. Tint Overlay: Hue, Opacity -->
+    <!-- 4. Tint Overlay: Hue, Opacity, Blend Mode -->
     <div class="section-header">Tint Overlay</div>
 
     <div class="slider-group">
@@ -331,6 +356,15 @@
         <span class="slider-value" id="opacityValue">0%</span>
       </div>
       <input type="range" id="opacitySlider" min="0" max="100" value="0">
+    </div>
+
+    <div class="blend-group">
+      <div class="blend-label">
+        <span>Blend Mode</span>
+      </div>
+      <select id="blendSelect" class="blend-select">
+        <!-- Options populated by JS from BLEND_MODES -->
+      </select>
     </div>
 
     <!-- 5. Divider -->
