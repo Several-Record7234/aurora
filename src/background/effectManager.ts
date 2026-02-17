@@ -84,24 +84,36 @@ async function removeAllEffects(): Promise<void> {
  * mapping for non-image items.
  *
  * BACKGROUND:
- * The ATTACHMENT system auto-fills the parent's visual bounding box.
- * For Images, this bounding box is defined by the image dimensions and
- * grid.offset — no correction needed.
+ * The ATTACHMENT effect auto-fills the parent's bounding box as
+ * reported by OBR. For Images, this aligns with the modelView
+ * transform — no correction needed.
  *
- * For Shapes, the bounding box includes the stroke (extending beyond
- * the geometric fill area). The effect's local (0,0) therefore starts
- * at the outer edge of the stroke, not the geometric corner. Since
- * the modelView matrix maps based on the shape's geometric transform,
- * the stroke expansion introduces a small positive offset (down-right).
- * We compensate by shifting local coords by -strokeWidth before the
- * transform. Empirical testing shows the full stroke width (not half)
- * is needed, suggesting the bounding box padding extends by the full
- * stroke width on each side.
+ * For Shapes, the bounding box includes padding for the stroke AND
+ * for selection handles. This means the effect's local (0,0) is
+ * offset from the position that modelView encodes. We compute the
+ * exact offset by comparing the shape's position (its centre) to
+ * the bounding box min corner returned by getItemBounds.
+ *
+ * The offset is: position - bounds.min
+ * This is in scene-space units and applied before the modelView
+ * transform in the shader (as coordOffset).
  */
-function getCoordOffset(item: Item): { x: number; y: number } {
+async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
   if (isShape(item)) {
-    const strokeWidth = item.style.strokeWidth ?? 0;
-    return { x: -strokeWidth, y: -strokeWidth };
+    try {
+      const bounds = await OBR.scene.items.getItemBounds([item.id]);
+      // The bounding box min corner is where the effect's local (0,0) is.
+      // The item's position (centre) is where modelView maps (0,0) to.
+      // We need to shift local coords so that (0,0) + offset maps to the
+      // correct screen point via modelView.
+      return {
+        x: -(item.position.x - bounds.min.x),
+        y: -(item.position.y - bounds.min.y),
+      };
+    } catch {
+      // Fallback if bounds query fails
+      return { x: 0, y: 0 };
+    }
   }
   return { x: 0, y: 0 };
 }
@@ -144,7 +156,7 @@ function getCoordOffset(item: Item): { x: number; y: number } {
  *    small positional offset. The shader adds this offset to local coords
  *    before transforming to screen-space.
  */
-function buildAuroraEffect(parent: Item, config: AuroraConfig): Effect {
+async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Effect> {
   const effect = buildEffect()
     .attachedTo(parent.id)
     .effectType("ATTACHMENT")
@@ -160,7 +172,7 @@ function buildAuroraEffect(parent: Item, config: AuroraConfig): Effect {
 
   // Set shader properties directly on the built object (not via builder)
   effect.sksl = getShaderCode();
-  effect.uniforms = getShaderUniforms(config, getCoordOffset(parent));
+  effect.uniforms = getShaderUniforms(config, await getCoordOffset(parent));
 
   effect.layer = "POST_PROCESS";
   effect.zIndex = 0;
@@ -240,7 +252,7 @@ async function reconcileEffects(items: Item[]): Promise<void> {
       }
 
       if (config.e) {
-        effectsToAdd.push(buildAuroraEffect(item, config));
+        effectsToAdd.push(await buildAuroraEffect(item, config));
       }
 
       // Update cache (even for disabled configs, so we don't keep
