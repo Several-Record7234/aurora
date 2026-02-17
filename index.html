@@ -152,30 +152,40 @@
 
     .action-btn {
       background: none;
-      border: none;
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
-      padding: 2px 4px;
-      border-radius: 3px;
-      transition: opacity 0.2s;
+      padding: 5px 12px;
+      border-radius: 6px;
+      transition: background 0.2s, border-color 0.2s;
     }
 
     .action-btn.rename {
       color: #2196F3;
+      border: 2px solid #2196F3;
+    }
+
+    .action-btn.rename:hover {
+      background: #E3F2FD;
+    }
+
+    .action-btn.rename.active {
+      background: #2196F3;
+      color: white;
     }
 
     .action-btn.clear {
       color: #f44336;
+      border: 2px solid #f44336;
     }
 
-    .action-btn.active {
-      text-decoration: underline;
-      font-weight: 700;
+    .action-btn.clear:hover {
+      background: #FFEBEE;
     }
 
-    .action-btn:hover {
-      opacity: 0.7;
+    .action-btn.clear.active {
+      background: #f44336;
+      color: white;
     }
 
     /* ── Preset Grid ─────────────────────── */
@@ -299,7 +309,7 @@
     <div class="header-row">
       <span class="header-title"><span class="header-icon-bg"><img src="/icon.png" alt="" class="header-icon"></span>Aurora</span>
       <div class="header-links">
-        <a class="header-link" href="https://github.com/Several-Record7234/aurora/blob/main/README" target="_blank" rel="noopener noreferrer" title="Help">
+        <a class="header-link" href="/README.md" target="_blank" rel="noopener noreferrer" title="Help">
           <img src="/help.svg" alt="Help">
         </a>
         <a class="header-link" href="https://discord.gg/u5RYMkV98s" target="_blank" rel="noopener noreferrer" title="Discord">
