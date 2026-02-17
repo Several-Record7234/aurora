@@ -108,8 +108,16 @@ async function removeAllEffects(): Promise<void> {
  * Fixed scene-space padding that the ATTACHMENT bounds extend beyond
  * the value returned by getItemBounds(). Measured empirically at
  * ~49 scene units across multiple stroke widths and zoom levels.
+ *
+ * DEV: Exposed on window.AURORA_PADDING for live tuning from the
+ * dev console. Change the value, then toggle the effect off/on (or
+ * nudge the shape) to trigger a reconcile with the new value.
  */
-const SHAPE_ATTACHMENT_PADDING = 49;
+let SHAPE_ATTACHMENT_PADDING = 49;
+(window as any).AURORA_PADDING = {
+  get value() { return SHAPE_ATTACHMENT_PADDING; },
+  set value(v: number) { SHAPE_ATTACHMENT_PADDING = v; },
+};
 
 async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
   if (isShape(item)) {
