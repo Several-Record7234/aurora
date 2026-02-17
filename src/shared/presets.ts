@@ -12,7 +12,7 @@
 
 import OBR from "@owlbear-rodeo/sdk";
 import { getPluginId } from "./pluginId";
-import { Presets, DEFAULT_PRESETS, isPresets, HSLOValues, MAX_NAME_LENGTH } from "./types";
+import { Presets, DEFAULT_PRESETS, isPresets, AuroraConfig, MAX_NAME_LENGTH } from "./types";
 
 const PRESETS_KEY = getPluginId("presets");
 
@@ -43,11 +43,11 @@ export async function savePresets(presets: Presets): Promise<void> {
   await OBR.room.setMetadata({ [PRESETS_KEY]: presets });
 }
 
-/** Save current HSLO values into a specific preset slot */
+/** Save current Aurora config values into a specific preset slot */
 export async function saveToPresetSlot(
   index: number,
   name: string,
-  values: HSLOValues
+  values: AuroraConfig
 ): Promise<void> {
   const presets = await loadPresets();
   presets[index] = {
@@ -56,6 +56,7 @@ export async function saveToPresetSlot(
     l: values.l,
     h: values.h,
     o: values.o,
+    b: values.b ?? 0,
   };
   await savePresets(presets);
 }

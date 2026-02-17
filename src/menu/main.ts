@@ -63,7 +63,7 @@ function resolveUI(): UIElements | null {
   if (
     !toggle || !satSlider || !lightSlider || !hueSlider || !opacitySlider ||
     !satValue || !lightValue || !hueValue || !opacityValue ||
-    !blendSelect || !presetSelect || !savePresetBtn || !removeBtn
+    !presetSelect || !savePresetBtn || !removeBtn
   ) {
     return null;
   }
@@ -171,7 +171,7 @@ function findMatchingPreset(): number {
 
 /** Populate the blend mode dropdown from the BLEND_MODES constant */
 function populateBlendModes() {
-  if (!ui) return;
+  if (!ui?.blendSelect) return;
   ui.blendSelect.innerHTML = "";
   for (const mode of BLEND_MODES) {
     const option = document.createElement("option");
@@ -198,8 +198,10 @@ function updateUI() {
   ui.hueValue.textContent = `${currentConfig.h}\u00B0`;
   ui.opacityValue.textContent = `${currentConfig.o}%`;
 
-  // Blend mode
-  ui.blendSelect.value = (currentConfig.b ?? 0).toString();
+  // Blend mode (hidden in production; updated if element exists)
+  if (ui.blendSelect) {
+    ui.blendSelect.value = (currentConfig.b ?? 0).toString();
+  }
 
   // Toggle
   ui.toggle.classList.toggle("active", currentConfig.e);
@@ -295,12 +297,14 @@ function setupEventListeners() {
     slider.addEventListener("change", debouncedSave);
   }
 
-  // Blend mode dropdown
-  ui.blendSelect.addEventListener("change", async () => {
-    if (!ui) return;
-    currentConfig.b = parseInt(ui.blendSelect.value, 10);
-    await writeConfigToItems();
-  });
+  // Blend mode dropdown (hidden in production; listener attached if element exists)
+  if (ui.blendSelect) {
+    ui.blendSelect.addEventListener("change", async () => {
+      if (!ui?.blendSelect) return;
+      currentConfig.b = parseInt(ui.blendSelect.value, 10);
+      await writeConfigToItems();
+    });
+  }
 
   // Preset select — immediately apply the selected preset
   ui.presetSelect.addEventListener("change", async () => {
