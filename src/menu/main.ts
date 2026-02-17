@@ -39,7 +39,7 @@ interface UIElements {
   lightValue: HTMLElement;
   hueValue: HTMLElement;
   opacityValue: HTMLElement;
-  blendSelect: HTMLSelectElement;
+  blendSelect: HTMLSelectElement | null;  // Hidden in production; kept for future use
   presetSelect: HTMLSelectElement;
   savePresetBtn: HTMLButtonElement;
   removeBtn: HTMLButtonElement;
@@ -152,7 +152,7 @@ function updateHueSliderTrack() {
 // ── Preset Matching ───────────────────────────────────────────────
 
 /**
- * Find a preset whose S, L, H, O values exactly match the current config.
+ * Find a preset whose S, L, H, O, B values exactly match the current config.
  * Returns the index if found, or -1 if no match.
  */
 function findMatchingPreset(): number {
@@ -162,7 +162,8 @@ function findMatchingPreset(): number {
       p.s === currentConfig.s &&
       p.l === currentConfig.l &&
       p.h === currentConfig.h &&
-      p.o === currentConfig.o
+      p.o === currentConfig.o &&
+      (p.b ?? 3) === (currentConfig.b ?? 3)
   );
 }
 
@@ -241,7 +242,8 @@ function updatePresetDropdown() {
     if (preset) {
       const option = document.createElement("option");
       option.value = index.toString();
-      option.textContent = `${preset.n} (S:${preset.s} L:${preset.l} H:${preset.h} O:${preset.o})`;
+      const blendLabel = BLEND_MODES.find((m) => m.value === (preset.b ?? 3))?.label ?? "Color";
+      option.textContent = `${preset.n} (S:${preset.s} L:${preset.l} H:${preset.h} O:${preset.o} \u2022 ${blendLabel})`;
       ui!.presetSelect.appendChild(option);
     }
   });
@@ -312,11 +314,11 @@ function setupEventListeners() {
     const preset = presets[index];
     if (!preset) return;
 
-    // Apply preset values (S, L, H, O), keeping current enabled state and blend mode
+    // Apply preset values (S, L, H, O, B), keeping current enabled state
     currentConfig = {
       s: preset.s, l: preset.l, h: preset.h, o: preset.o,
       e: currentConfig.e,
-      b: currentConfig.b,
+      b: preset.b ?? currentConfig.b,
     };
     updateUI();
     await writeConfigToItems();

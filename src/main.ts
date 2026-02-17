@@ -15,6 +15,7 @@ import {
   isPresets,
   EMPTY_PRESETS,
   MAX_NAME_LENGTH,
+  BLEND_MODES,
 } from "./shared/types";
 import { loadPresets, savePresets, clearPresetSlot, getPresetsKey } from "./shared/presets";
 
@@ -89,12 +90,15 @@ function renderPresets() {
     nameDiv.className = "preset-name";
     nameDiv.textContent = preset?.n ?? `Preset ${index + 1}`;
 
-    // Values — displayed in S, L, H, O order
+    // Values — displayed in S, L, H, O order with blend mode
     const valuesDiv = document.createElement("div");
     valuesDiv.className = "preset-values";
-    valuesDiv.textContent = preset
-      ? `S:${preset.s}% L:${preset.l}% H:${preset.h}\u00B0 O:${preset.o}%`
-      : "Empty";
+    if (preset) {
+      const blendLabel = BLEND_MODES.find((m) => m.value === (preset.b ?? 3))?.label ?? "Color";
+      valuesDiv.textContent = `S:${preset.s}% L:${preset.l}% H:${preset.h}\u00B0 O:${preset.o}% \u2022 ${blendLabel}`;
+    } else {
+      valuesDiv.textContent = "Empty";
+    }
 
     div.appendChild(nameDiv);
     div.appendChild(valuesDiv);

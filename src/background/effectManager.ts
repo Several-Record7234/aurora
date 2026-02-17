@@ -107,19 +107,12 @@ async function removeAllEffects(): Promise<void> {
  *
  * SHAPE ORIGIN CORRECTIONS (measured empirically):
  *   RECTANGLE: origin at centre — no dimension correction needed
- *   CIRCLE:    origin at top-left of bounding ellipse — +1× w/h
- *   TRIANGLE:  origin at top-left of bounding box — +1× w/h
- *   HEXAGON:   pointy-top; x = flat-to-flat distance, y = point-to-point
- *   PENTAGON:  TBD (defaulting to +1× w/h, needs measurement)
- *   STAR:      TBD (defaulting to +1× w/h, needs measurement)
+ *   CIRCLE:    origin at top-left of bounding ellipse — +1× w, +1× h
+ *   TRIANGLE:  origin at top of bounding box — +1× w, no y correction
+ *   HEXAGON:   pointy-top; x = sqrt(3)/2 × w (flat-to-flat), y = 1× h
  *
- * DEV: Exposed on window.AURORA_SHAPE_CORRECTIONS for live tuning.
- * Each entry has { excess, mx, my } where:
- *   excess = bounds excess subtracted per side (handle padding)
- *   mx = multiplier for item.width added to x offset
- *   my = multiplier for item.height added to y offset
- * Change values, then toggle the effect or nudge the shape to
- * trigger a reconcile.
+ * All shapes share the same bounds excess of 12 scene units, which
+ * accounts for selection handle padding in getItemBounds().
  */
 
 interface ShapeCorrection {
@@ -128,17 +121,15 @@ interface ShapeCorrection {
   my: number;      // Height multiplier for y offset
 }
 
-const SHAPE_CORRECTIONS: Record<string, ShapeCorrection> = {
-  RECTANGLE: { excess: 12, mx: 0,   my: 0   },
-  CIRCLE:    { excess: 12, mx: 1,   my: 1   },
-  TRIANGLE:  { excess: 12, mx: 1,   my: 1   },
-  HEXAGON:   { excess: 12, mx: 0.866, my: 1 },  // sqrt(3)/2 ≈ 0.866 for flat-to-flat
-  PENTAGON:  { excess: 12, mx: 1,   my: 1   },   // TBD — needs measurement
-  STAR:      { excess: 12, mx: 1,   my: 1   },   // TBD — needs measurement
-};
+/** Bounds excess common to all shape types (selection handle padding) */
+const SHAPE_BOUNDS_EXCESS = 12;
 
-// DEV: expose for live tuning from the dev console
-(window as any).AURORA_SHAPE_CORRECTIONS = SHAPE_CORRECTIONS;
+const SHAPE_CORRECTIONS: Record<string, ShapeCorrection> = {
+  RECTANGLE: { excess: SHAPE_BOUNDS_EXCESS, mx: 0,     my: 0 },
+  CIRCLE:    { excess: SHAPE_BOUNDS_EXCESS, mx: 1,     my: 1 },
+  TRIANGLE:  { excess: SHAPE_BOUNDS_EXCESS, mx: 1,     my: 0 },
+  HEXAGON:   { excess: SHAPE_BOUNDS_EXCESS, mx: 0.866, my: 1 },  // sqrt(3)/2 ≈ 0.866
+};
 
 async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
   if (isShape(item)) {

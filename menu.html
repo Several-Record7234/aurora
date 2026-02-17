@@ -358,12 +358,14 @@
       <input type="range" id="opacitySlider" min="0" max="100" value="0">
     </div>
 
-    <div class="blend-group">
+    <!-- Blend mode: hidden from UI but functional in code.
+         Presets set the blend mode automatically when loaded.
+         To re-enable, remove the display:none style below. -->
+    <div class="blend-group" style="display: none;">
       <div class="blend-label">
         <span>Blend Mode</span>
       </div>
       <select id="blendSelect" class="blend-select">
-        <!-- Options populated by JS from BLEND_MODES -->
       </select>
     </div>
 

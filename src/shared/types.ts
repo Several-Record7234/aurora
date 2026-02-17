@@ -64,7 +64,7 @@ export const DEFAULT_CONFIG: AuroraConfig = {
   h: 0,
   o: 0,
   e: true,
-  b: 0,
+  b: 3,  // Color blend mode
 };
 
 // ── Presets (stored in room metadata) ─────────────────────────────
@@ -74,6 +74,7 @@ export const MAX_PRESET_SLOTS = 6;
 
 export interface Preset extends HSLOValues {
   n: string; // Name
+  b: number; // Blend mode index (see BLEND_MODES)
 }
 
 export type Presets = Array<Preset | null>;
@@ -85,12 +86,14 @@ export const MAX_NAME_LENGTH = 16;
  * Starter presets, written to room metadata the first time presets are
  * loaded in a room that has never used Aurora before. The last two slots
  * are left empty so users have room to save their own immediately.
+ *
+ * Blend modes: 0=Multiply, 1=Overlay, 2=Soft Light, 3=Color
  */
 export const DEFAULT_PRESETS: Presets = [
-  { n: "Midnight",    s: 25,  l: 30, h: -99,  o: 9  },
-  { n: "Golden Hour", s: 120, l: 80, h: 30,   o: 10 },
-  { n: "Pre-Dawn",    s: 100, l: 50, h: -150, o: 8  },
-  { n: "Blood Moon",  s: 20,  l: 40, h: 0,    o: 14 },
+  { n: "Midnight",    s: 25,  l: 30, h: 115,  o: 40, b: 3 },  // Color
+  { n: "Golden Hour", s: 120, l: 80, h: 30,   o: 20, b: 2 },  // Soft Light
+  { n: "Pre-Dawn",    s: 80,  l: 50, h: -150, o: 40, b: 3 },  // Color
+  { n: "Blood Moon",  s: 35,  l: 40, h: 0,    o: 50, b: 0 },  // Multiply
   null,
   null,
 ];
