@@ -56,6 +56,8 @@ export interface HSLOValues {
 export interface AuroraConfig extends HSLOValues {
   e: boolean; // Enabled (allows toggling without losing values)
   b: number;  // Blend mode index (see BLEND_MODES)
+  f: number;  // Feather: 0 to 100 (% of radius for edge fade)
+  fi: boolean; // Feather invert: false = fade edges, true = fade centre
 }
 
 export const DEFAULT_CONFIG: AuroraConfig = {
@@ -65,6 +67,8 @@ export const DEFAULT_CONFIG: AuroraConfig = {
   o: 0,
   e: true,
   b: 3,  // Color blend mode
+  f: 0,  // No feather
+  fi: false,
 };
 
 // ── Presets (stored in room metadata) ─────────────────────────────
@@ -109,8 +113,8 @@ export function isAuroraConfig(val: unknown): val is AuroraConfig {
     typeof obj.h === "number" &&
     typeof obj.o === "number" &&
     typeof obj.e === "boolean"
-    // b is optional for backwards compatibility — older configs without it
-    // default to 0 (Normal) in getShaderUniforms
+    // b, f, fi are optional for backwards compatibility — older configs
+    // without them use defaults in getShaderUniforms
   );
 }
 

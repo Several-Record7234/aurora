@@ -21,21 +21,48 @@ import type { AuroraConfig } from "./types";
  * Build the uniform array from Aurora config values.
  *
  * UNIFORM MAPPING:
- *   saturation:  0–200  → 0.0–2.0   (multiplier; 1.0 = no change)
- *   lightness:   0–200  → 0.0–2.0   (multiplier; 1.0 = no change)
- *   hue:        -180–180 → -0.5–0.5 (divided by 360 so fract() gives 0–1 HSV hue)
- *   opacity:     0–100  → 0.0–1.0   (tint blend strength; 0 = no tint)
- *   blendMode:   0–4    → 0.0–4.0   (index into blend mode switch)
- *   coordOffset: vec2                (pixel offset to correct for shape stroke bounds)
+ *   saturation:    0–200  → 0.0–2.0   (multiplier; 1.0 = no change)
+ *   lightness:     0–200  → 0.0–2.0   (multiplier; 1.0 = no change)
+ *   hue:          -180–180 → -0.5–0.5 (divided by 360 so fract() gives 0–1 HSV hue)
+ *   opacity:       0–100  → 0.0–1.0   (tint blend strength; 0 = no tint)
+ *   blendMode:     0–3    → 0.0–3.0   (index into blend mode switch)
+ *   coordOffset:   vec2               (pixel offset to correct for shape stroke bounds)
+ *   feather:       0–100  → 0.0–1.0   (fraction of half-size for edge fade zone)
+ *   invertFeather: bool   → 0.0|1.0   (0 = fade edges, 1 = fade centre)
+ *   itemSize:      vec2               (attachment bounds size in local coords)
+ *   shapeType:     0–3    → 0.0–3.0   (0=rect/image, 1=circle, 2=triangle, 3=hexagon)
  */
-export function getShaderUniforms(config: AuroraConfig, coordOffset: { x: number; y: number } = { x: 0, y: 0 }) {
+
+/** Shape type indices for the shapeType uniform */
+export const SHAPE_TYPE_RECT = 0;
+export const SHAPE_TYPE_CIRCLE = 1;
+export const SHAPE_TYPE_TRIANGLE = 2;
+export const SHAPE_TYPE_HEXAGON = 3;
+
+export interface ShaderGeometry {
+  coordOffset: { x: number; y: number };
+  itemSize: { x: number; y: number };
+  shapeType: number;
+}
+
+const DEFAULT_GEOMETRY: ShaderGeometry = {
+  coordOffset: { x: 0, y: 0 },
+  itemSize: { x: 1, y: 1 },
+  shapeType: SHAPE_TYPE_RECT,
+};
+
+export function getShaderUniforms(config: AuroraConfig, geometry: ShaderGeometry = DEFAULT_GEOMETRY) {
   return [
     { name: "saturation", value: config.s / 100.0 },
     { name: "lightness", value: config.l / 100.0 },
     { name: "hue", value: config.h / 360.0 },
     { name: "opacity", value: config.o / 100.0 },
     { name: "blendMode", value: (config.b ?? 0) * 1.0 },
-    { name: "coordOffset", value: coordOffset },
+    { name: "coordOffset", value: geometry.coordOffset },
+    { name: "feather", value: (config.f ?? 0) / 100.0 },
+    { name: "invertFeather", value: (config.fi ?? false) ? 1.0 : 0.0 },
+    { name: "itemSize", value: geometry.itemSize },
+    { name: "shapeType", value: geometry.shapeType * 1.0 },
   ];
 }
 
@@ -49,7 +76,8 @@ export function getShaderUniforms(config: AuroraConfig, coordOffset: { x: number
  *   4. Generate a flat tint colour from the Hue slider value
  *   5. Blend the tint over the adjusted pixel using the selected blend mode
  *   6. Mix the blended result at Opacity strength
- *   7. Output with original alpha (opacity does NOT fade the whole effect)
+ *   7. Apply feather mask (fade edges or centre based on invert flag)
+ *   8. Output: mix between original scene and graded result via fade
  *
  * This means Saturation and Lightness always take full effect regardless
  * of the Opacity slider. Opacity exclusively controls the strength of the
@@ -61,6 +89,20 @@ export function getShaderUniforms(config: AuroraConfig, coordOffset: { x: number
  *   1 = Overlay    — contrast boost; darkens darks, lightens lights
  *   2 = Soft Light — subtle contrast; natural-looking tints
  *   3 = Color      — applies tint hue/saturation, preserves scene luminosity
+ *
+ * FEATHER:
+ *   feather (0–1) controls the depth of the fade zone as a fraction of the
+ *   shape's half-size. invertFeather flips the direction:
+ *     0 = normal:  full effect at centre, fades to transparent at edges
+ *     1 = inverted: transparent at centre, full effect at edges
+ *   The fade shape matches the item geometry (rectangular for rects/images,
+ *   elliptical for circles, rectangular fallback for others).
+ *
+ * SHAPE TYPES:
+ *   0 = Rectangle / Image — rectangular distance-to-edge
+ *   1 = Circle / Ellipse  — elliptical distance-to-edge
+ *   2 = Triangle           — rectangular fallback
+ *   3 = Hexagon            — rectangular fallback
  *
  * COORDINATE NOTES (see also effectManager.ts):
  *   - Uses `modelView` (not `view`) for ATTACHMENT effects — combines the
@@ -80,6 +122,10 @@ export function getShaderCode(): string {
     uniform float opacity;
     uniform float blendMode;
     uniform vec2 coordOffset;
+    uniform float feather;
+    uniform float invertFeather;
+    uniform vec2 itemSize;
+    uniform float shapeType;
 
     vec3 rgb2hsv(vec3 c) {
       vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -133,6 +179,44 @@ export function getShaderCode(): string {
       return hsv2rgb(vec3(blendHSV.x, blendHSV.y, baseHSV.z));
     }
 
+    // ── Feather mask ──
+    // Returns 0.0–1.0 representing how much of the effect to apply.
+    // When invertFeather is 0: 1 at centre, fades to 0 at edges.
+    // When invertFeather is 1: 0 at centre, fades to 1 at edges.
+
+    float computeFeather(vec2 coord) {
+      if (feather <= 0.0) return 1.0;
+
+      vec2 halfSize = itemSize * 0.5;
+      vec2 centre = halfSize;
+
+      // Normalised position: 0 at centre, 1 at edge
+      float edgeNorm;
+
+      // Circle/ellipse: elliptical distance
+      float isCircle = step(0.5, shapeType) * step(shapeType, 1.5);
+      vec2 norm = (coord - centre) / halfSize;
+      float ellipseNorm = length(norm);
+
+      // Rectangle and others: rectangular distance (min axis)
+      vec2 distFromEdge = halfSize - abs(coord - centre);
+      float minHalf = min(halfSize.x, halfSize.y);
+      float rectNorm = 1.0 - min(distFromEdge.x, distFromEdge.y) / minHalf;
+
+      edgeNorm = mix(rectNorm, ellipseNorm, isCircle);
+
+      // Feather zone: from (1 - feather) to 1
+      // At edgeNorm <= (1 - feather): fade = 1 (full effect)
+      // At edgeNorm >= 1: fade = 0 (no effect)
+      float innerEdge = 1.0 - feather;
+      float fade = 1.0 - smoothstep(innerEdge, 1.0, edgeNorm);
+
+      // Invert: flip the fade direction
+      fade = mix(fade, 1.0 - fade, invertFeather);
+
+      return fade;
+    }
+
     half4 main(vec2 coord) {
       // Apply coordinate offset to compensate for shape stroke bounds,
       // then transform from item-local coords to screen-space pixels
@@ -159,9 +243,13 @@ export function getShaderCode(): string {
       blended = mix(blended, blendSoftLight(adjusted, tint), step(1.5, blendMode) * step(blendMode, 2.5));
       blended = mix(blended, blendColor(adjusted, tint),     step(2.5, blendMode));
 
-      vec3 final = mix(adjusted, blended, opacity);
+      vec3 graded = mix(adjusted, blended, opacity);
 
-      return half4(final, color.a);
+      // ── 4. Feather mask ──
+      float fade = computeFeather(coord);
+      vec3 result = mix(color.rgb, graded, fade);
+
+      return half4(result, color.a);
     }
   `;
 }

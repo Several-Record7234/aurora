@@ -20,7 +20,7 @@
 
 import OBR, { buildEffect, Effect, Item, isShape } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
-import { getShaderCode, getShaderUniforms } from "../shared/shader";
+import { getShaderCode, getShaderUniforms, ShaderGeometry, SHAPE_TYPE_RECT, SHAPE_TYPE_CIRCLE, SHAPE_TYPE_TRIANGLE, SHAPE_TYPE_HEXAGON } from "../shared/shader";
 import { AuroraConfig, isAuroraConfig } from "../shared/types";
 
 // ── Metadata Keys ─────────────────────────────────────────────────
@@ -52,6 +52,7 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
   const shapeType = isShape(item) ? item.shapeType : "";
   return [
     config.s, config.l, config.h, config.o, config.e, config.b ?? 0,
+    config.f ?? 0, config.fi ?? false,
     item.position.x, item.position.y,
     item.rotation,
     item.scale.x, item.scale.y,
@@ -131,22 +132,64 @@ const SHAPE_CORRECTIONS: Record<string, ShapeCorrection> = {
   HEXAGON:   { excess: SHAPE_BOUNDS_EXCESS, mx: 0.866, my: 1 },  // sqrt(3)/2 ≈ 0.866
 };
 
-async function getCoordOffset(item: Item): Promise<{ x: number; y: number }> {
+/** Map OBR shapeType strings to shader shapeType indices */
+function getShapeTypeIndex(item: Item): number {
+  if (!isShape(item)) return SHAPE_TYPE_RECT;
+  switch (item.shapeType) {
+    case "CIRCLE":    return SHAPE_TYPE_CIRCLE;
+    case "TRIANGLE":  return SHAPE_TYPE_TRIANGLE;
+    case "HEXAGON":   return SHAPE_TYPE_HEXAGON;
+    default:          return SHAPE_TYPE_RECT;
+  }
+}
+
+/**
+ * Compute the full shader geometry for an item: coordinate offset,
+ * attachment bounds size, and shape type index.
+ */
+async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
+  const shapeType = getShapeTypeIndex(item);
+
   if (isShape(item)) {
     try {
       const bounds = await OBR.scene.items.getItemBounds([item.id]);
-      const shapeType = item.shapeType ?? "RECTANGLE";
-      const corr = SHAPE_CORRECTIONS[shapeType] ?? SHAPE_CORRECTIONS.RECTANGLE;
+      const obrShapeType = item.shapeType ?? "RECTANGLE";
+      const corr = SHAPE_CORRECTIONS[obrShapeType] ?? SHAPE_CORRECTIONS.RECTANGLE;
 
-      const ox = -(item.position.x - bounds.min.x - corr.excess) + corr.mx * item.width;
-      const oy = -(item.position.y - bounds.min.y - corr.excess) + corr.my * item.height;
+      const coordOffset = {
+        x: -(item.position.x - bounds.min.x - corr.excess) + corr.mx * item.width,
+        y: -(item.position.y - bounds.min.y - corr.excess) + corr.my * item.height,
+      };
 
-      return { x: ox, y: oy };
+      // Attachment bounds size = getItemBounds extent
+      // (this is the coord space the shader operates in)
+      const itemSize = {
+        x: bounds.max.x - bounds.min.x,
+        y: bounds.max.y - bounds.min.y,
+      };
+
+      return { coordOffset, itemSize, shapeType };
     } catch {
-      return { x: 0, y: 0 };
+      return { coordOffset: { x: 0, y: 0 }, itemSize: { x: 1, y: 1 }, shapeType };
     }
   }
-  return { x: 0, y: 0 };
+
+  // Images: no coord offset needed; use image dimensions for feather
+  // Images have a grid with dpi and offset but the attachment fills
+  // the rendered bounds. We use getItemBounds for consistency.
+  try {
+    const bounds = await OBR.scene.items.getItemBounds([item.id]);
+    return {
+      coordOffset: { x: 0, y: 0 },
+      itemSize: {
+        x: bounds.max.x - bounds.min.x,
+        y: bounds.max.y - bounds.min.y,
+      },
+      shapeType,
+    };
+  } catch {
+    return { coordOffset: { x: 0, y: 0 }, itemSize: { x: 1, y: 1 }, shapeType };
+  }
 }
 
 /**
@@ -210,7 +253,7 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
 
   // Set shader properties directly on the built object (not via builder)
   effect.sksl = getShaderCode();
-  effect.uniforms = getShaderUniforms(config, await getCoordOffset(parent));
+  effect.uniforms = getShaderUniforms(config, await getShaderGeometry(parent));
 
   effect.layer = "POST_PROCESS";
 

@@ -5,9 +5,15 @@
  * right-clicks a MAP-layer item that already has Aurora config and selects
  * "Aurora Settings". It provides real-time HSLO sliders, a blend mode
  * dropdown, preset load/save, and a toggle to enable/disable the effect.
+ *
+ * LIVE PREVIEW:
+ * During slider drags, the local effect's uniforms are updated directly
+ * via scene.local for instant visual feedback without syncing to other
+ * players. On mouse release, the final value is written to item metadata
+ * which triggers the normal reconcile path and syncs to all clients.
  */
 
-import OBR from "@owlbear-rodeo/sdk";
+import OBR, { Effect } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
 import {
   AuroraConfig,
@@ -20,12 +26,12 @@ import {
   EMPTY_PRESETS,
   BLEND_MODES,
 } from "../shared/types";
+import { getShaderUniforms } from "../shared/shader";
 import { loadPresets, saveToPresetSlot, getPresetsKey } from "../shared/presets";
 
 const CONFIG_KEY = getPluginId("config");
-
-/** Debounce delay for writing slider changes to item metadata (ms) */
-const SAVE_DEBOUNCE_MS = 150;
+const EFFECT_META_KEY = getPluginId("isEffect");
+const EFFECT_SOURCE_KEY = getPluginId("sourceItemId");
 
 // ── DOM Elements ──────────────────────────────────────────────────
 
@@ -40,6 +46,9 @@ interface UIElements {
   hueValue: HTMLElement;
   opacityValue: HTMLElement;
   blendSelect: HTMLSelectElement | null;  // Hidden in production; kept for future use
+  featherSlider: HTMLInputElement;
+  featherValue: HTMLElement;
+  invertBtn: HTMLButtonElement;
   presetSelect: HTMLSelectElement;
   savePresetBtn: HTMLButtonElement;
   removeBtn: HTMLButtonElement;
@@ -56,6 +65,9 @@ function resolveUI(): UIElements | null {
   const hueValue = document.getElementById("hueValue");
   const opacityValue = document.getElementById("opacityValue");
   const blendSelect = document.getElementById("blendSelect") as HTMLSelectElement | null;
+  const featherSlider = document.getElementById("featherSlider") as HTMLInputElement | null;
+  const featherValue = document.getElementById("featherValue");
+  const invertBtn = document.getElementById("invertBtn") as HTMLButtonElement | null;
   const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement | null;
   const savePresetBtn = document.getElementById("savePresetBtn") as HTMLButtonElement | null;
   const removeBtn = document.getElementById("removeBtn") as HTMLButtonElement | null;
@@ -63,6 +75,7 @@ function resolveUI(): UIElements | null {
   if (
     !toggle || !satSlider || !lightSlider || !hueSlider || !opacitySlider ||
     !satValue || !lightValue || !hueValue || !opacityValue ||
+    !featherSlider || !featherValue || !invertBtn ||
     !presetSelect || !savePresetBtn || !removeBtn
   ) {
     return null;
@@ -71,7 +84,8 @@ function resolveUI(): UIElements | null {
   return {
     toggle, satSlider, lightSlider, hueSlider, opacitySlider,
     satValue, lightValue, hueValue, opacityValue,
-    blendSelect, presetSelect, savePresetBtn, removeBtn,
+    blendSelect, featherSlider, featherValue, invertBtn,
+    presetSelect, savePresetBtn, removeBtn,
   };
 }
 
@@ -82,13 +96,50 @@ let selectedItemIds: string[] = [];
 let currentConfig: AuroraConfig = { ...DEFAULT_CONFIG };
 let presets: Presets = [...EMPTY_PRESETS];
 
-// ── Debounce ──────────────────────────────────────────────────────
+// ── Live Preview ──────────────────────────────────────────────────
 
-let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Update local effect uniforms directly for instant visual feedback
+ * during slider drags, without writing to synced item metadata.
+ *
+ * Finds the local ATTACHMENT effect linked to each selected item and
+ * patches its uniforms in place. The geometry (coordOffset, itemSize,
+ * shapeType) is preserved from whatever the effect manager last set —
+ * we only update the config-derived uniforms.
+ */
+async function previewLocal(): Promise<void> {
+  if (selectedItemIds.length === 0) return;
 
-function debouncedSave() {
-  if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => writeConfigToItems(), SAVE_DEBOUNCE_MS);
+  // Find local effects linked to our selected items
+  const localEffects = await OBR.scene.local.getItems<Effect>(
+    (item) =>
+      item.metadata[EFFECT_META_KEY] !== undefined &&
+      selectedItemIds.includes(item.metadata[EFFECT_SOURCE_KEY] as string)
+  );
+
+  if (localEffects.length === 0) return;
+
+  await OBR.scene.local.updateItems<Effect>(
+    localEffects.map((e) => e.id),
+    (effects) => {
+      for (const effect of effects) {
+        if (!effect.uniforms) continue;
+
+        // Build fresh config-derived uniforms (without geometry)
+        const freshUniforms = getShaderUniforms(currentConfig);
+
+        // Patch only the config-derived uniform values, preserving
+        // geometry uniforms (coordOffset, itemSize, shapeType) that
+        // the effect manager computed
+        for (const fresh of freshUniforms) {
+          const existing = effect.uniforms.find((u: { name: string }) => u.name === fresh.name);
+          if (existing) {
+            existing.value = fresh.value;
+          }
+        }
+      }
+    }
+  );
 }
 
 // ── Item Config Read/Write ────────────────────────────────────────
@@ -203,6 +254,11 @@ function updateUI() {
     ui.blendSelect.value = (currentConfig.b ?? 0).toString();
   }
 
+  // Feather
+  ui.featherSlider.value = (currentConfig.f ?? 0).toString();
+  ui.featherValue.textContent = `${currentConfig.f ?? 0}%`;
+  ui.invertBtn.classList.toggle("active", currentConfig.fi ?? false);
+
   // Toggle
   ui.toggle.classList.toggle("active", currentConfig.e);
 
@@ -292,9 +348,13 @@ function setupEventListeners() {
 
       // Live-update the preset dropdown match indicator
       updatePresetSelection();
+
+      // Instant local preview (no sync to other players)
+      previewLocal();
     });
 
-    slider.addEventListener("change", debouncedSave);
+    // On release, write to synced item metadata
+    slider.addEventListener("change", () => writeConfigToItems());
   }
 
   // Blend mode dropdown (hidden in production; listener attached if element exists)
@@ -305,6 +365,24 @@ function setupEventListeners() {
       await writeConfigToItems();
     });
   }
+
+  // Feather slider
+  ui.featherSlider.addEventListener("input", () => {
+    if (!ui) return;
+    const value = parseInt(ui.featherSlider.value, 10);
+    currentConfig.f = value;
+    ui.featherValue.textContent = `${value}%`;
+    previewLocal();
+  });
+  ui.featherSlider.addEventListener("change", () => writeConfigToItems());
+
+  // Invert button (immediate write — it's a toggle, not a drag)
+  ui.invertBtn.addEventListener("click", async () => {
+    if (!ui) return;
+    currentConfig.fi = !(currentConfig.fi ?? false);
+    ui.invertBtn.classList.toggle("active", currentConfig.fi);
+    await writeConfigToItems();
+  });
 
   // Preset select — immediately apply the selected preset
   ui.presetSelect.addEventListener("change", async () => {
@@ -319,10 +397,13 @@ function setupEventListeners() {
     if (!preset) return;
 
     // Apply preset values (S, L, H, O, B), keeping current enabled state
+    // and feather settings (feather is per-item, not part of presets)
     currentConfig = {
       s: preset.s, l: preset.l, h: preset.h, o: preset.o,
       e: currentConfig.e,
       b: preset.b ?? currentConfig.b,
+      f: currentConfig.f ?? 0,
+      fi: currentConfig.fi ?? false,
     };
     updateUI();
     await writeConfigToItems();
