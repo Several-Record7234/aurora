@@ -198,7 +198,7 @@ export function getShaderCode(): string {
       //   Circles (shapeType 1): already centred at (0,0)
       //   Everything else: origin at top-left, shift by -halfSize
       float isCircle = step(0.5, shapeType) * step(shapeType, 1.5); // step(0.5, shapeType) * step(shapeType, 1.5);
-      vec2 centreRel = mix(correctedCoord, correctedCoord - halfSize, isCircle); 
+      vec2 centreRel = mix(correctedCoord, correctedCoord - halfSize, isCircle);
       // the above line was erroneously: vec2 centreRel = mix(correctedCoord - halfSize, correctedCoord, isCircle) 
 
       // Normalised position: 0 at centre, 1 at edge
