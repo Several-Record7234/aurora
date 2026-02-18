@@ -103,10 +103,17 @@ let presets: Presets = [...EMPTY_PRESETS];
  * during slider drags, without writing to synced item metadata.
  *
  * Finds the local ATTACHMENT effect linked to each selected item and
- * patches its uniforms in place. The geometry (coordOffset, itemSize,
- * shapeType) is preserved from whatever the effect manager last set —
- * we only update the config-derived uniforms.
+ * patches only the config-derived uniforms in place. Geometry uniforms
+ * (coordOffset, itemSize, shapeType) are left untouched — they were
+ * computed by the effect manager and must not be overwritten.
  */
+
+/** Uniform names that are derived from AuroraConfig (safe to patch) */
+const CONFIG_UNIFORMS = new Set([
+  "saturation", "lightness", "hue", "opacity",
+  "blendMode", "feather", "invertFeather",
+]);
+
 async function previewLocal(): Promise<void> {
   if (selectedItemIds.length === 0) return;
 
@@ -119,19 +126,18 @@ async function previewLocal(): Promise<void> {
 
   if (localEffects.length === 0) return;
 
+  // Build fresh config-derived uniform values
+  const freshUniforms = getShaderUniforms(currentConfig);
+
   await OBR.scene.local.updateItems<Effect>(
     localEffects.map((e) => e.id),
     (effects) => {
       for (const effect of effects) {
         if (!effect.uniforms) continue;
 
-        // Build fresh config-derived uniforms (without geometry)
-        const freshUniforms = getShaderUniforms(currentConfig);
-
-        // Patch only the config-derived uniform values, preserving
-        // geometry uniforms (coordOffset, itemSize, shapeType) that
-        // the effect manager computed
+        // Patch ONLY config-derived uniforms, skip geometry uniforms
         for (const fresh of freshUniforms) {
+          if (!CONFIG_UNIFORMS.has(fresh.name)) continue;
           const existing = effect.uniforms.find((u: { name: string }) => u.name === fresh.name);
           if (existing) {
             existing.value = fresh.value;
