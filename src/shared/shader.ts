@@ -253,8 +253,8 @@ export function getShaderCode(): string {
       // Red = x position (0 at left, 1 at right)
       // Green = y position (0 at top, 1 at bottom)
       // If the gradient fills the item evenly, itemSize is correct.
-      // vec2 dbg = coord / itemSize;
-      // return half4(half3(dbg.x, dbg.y, 0.0), 1.0);
+      vec2 dbg = coord / itemSize;
+      return half4(half3(dbg.x, dbg.y, 0.0), 1.0);
 
       return half4(result, color.a);
     }
