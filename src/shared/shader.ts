@@ -183,23 +183,32 @@ export function getShaderCode(): string {
     // Returns 0.0–1.0 representing how much of the effect to apply.
     // When invertFeather is 0: 1 at centre, fades to 0 at edges.
     // When invertFeather is 1: 0 at centre, fades to 1 at edges.
+    //
+    // COORDINATE ORIGINS vary by shape type:
+    //   Rectangles/images: correctedCoord ranges 0 → itemSize (origin at top-left)
+    //   Circles:           correctedCoord ranges -halfSize → +halfSize (origin at centre)
+    // We normalise both to centre-relative space before computing the fade.
 
-    float computeFeather(vec2 coord) {
+    float computeFeather(vec2 correctedCoord) {
       if (feather <= 0.0) return 1.0;
 
       vec2 halfSize = itemSize * 0.5;
-      vec2 centre = halfSize;
+
+      // Convert to centre-relative coordinates:
+      //   Circles (shapeType 1): already centred at (0,0)
+      //   Everything else: origin at top-left, shift by -halfSize
+      float isCircle = step(0.5, shapeType) * step(shapeType, 1.5);
+      vec2 centreRel = mix(correctedCoord - halfSize, correctedCoord, isCircle);
 
       // Normalised position: 0 at centre, 1 at edge
       float edgeNorm;
 
-      // Circle/ellipse: elliptical distance
-      float isCircle = step(0.5, shapeType) * step(shapeType, 1.5);
-      vec2 norm = (coord - centre) / halfSize;
-      float ellipseNorm = length(norm);
+      // Circle/ellipse: elliptical distance from centre
+      vec2 ellipseNorm2 = centreRel / halfSize;
+      float ellipseNorm = length(ellipseNorm2);
 
-      // Rectangle and others: rectangular distance (min axis)
-      vec2 distFromEdge = halfSize - abs(coord - centre);
+      // Rectangle and others: rectangular distance (nearest edge)
+      vec2 distFromEdge = halfSize - abs(centreRel);
       float minHalf = min(halfSize.x, halfSize.y);
       float rectNorm = 1.0 - min(distFromEdge.x, distFromEdge.y) / minHalf;
 
@@ -218,9 +227,12 @@ export function getShaderCode(): string {
     }
 
     half4 main(vec2 coord) {
-      // Apply coordinate offset to compensate for shape stroke bounds,
-      // then transform from item-local coords to screen-space pixels
-      vec2 uv = (vec3(coord + coordOffset, 1) * modelView).xy;
+      // Corrected coordinate: shifts the origin to match the actual
+      // item bounds (compensates for shape-specific origin offsets)
+      vec2 corrected = coord + coordOffset;
+
+      // Transform to screen-space pixels for scene sampling
+      vec2 uv = (vec3(corrected, 1) * modelView).xy;
       half4 color = scene.eval(uv);
 
       // ── 1. Saturation adjustment (full strength) ──
@@ -245,16 +257,16 @@ export function getShaderCode(): string {
 
       vec3 graded = mix(adjusted, blended, opacity);
 
-      // ── 4. Feather mask ──
-      float fade = computeFeather(coord);
+      // ── 4. Feather mask (uses corrected coord for proper origin) ──
+      float fade = computeFeather(corrected);
       vec3 result = mix(color.rgb, graded, fade);
 
-      // DEBUG: Uncomment to visualise the normalised coordinate space.
+      // DEBUG: Uncomment to visualise the corrected coordinate space.
       // Red = x position (0 at left, 1 at right)
       // Green = y position (0 at top, 1 at bottom)
-      // If the gradient fills the item evenly, itemSize is correct.
-      vec2 dbg = coord / itemSize;
-      return half4(half3(dbg.x, dbg.y, 0.0), 1.0);
+      // If the gradient fills the item evenly, coord correction is right.
+      // vec2 dbg = corrected / itemSize;
+      // return half4(half3(dbg.x, dbg.y, 0.0), 1.0);
 
       return half4(result, color.a);
     }
