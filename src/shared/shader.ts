@@ -197,14 +197,15 @@ export function getShaderCode(): string {
       // Convert to centre-relative coordinates:
       //   Circles (shapeType 1): already centred at (0,0)
       //   Everything else: origin at top-left, shift by -halfSize
-      float isCircle = step(0.5, shapeType) * step(shapeType, 1.5);
-      vec2 centreRel = mix(correctedCoord - halfSize, correctedCoord, isCircle);
+      float isCircle = step(0.5, shapeType) * step(shapeType, 1.5); // step(0.5, shapeType) * step(shapeType, 1.5);
+      vec2 centreRel = mix(correctedCoord, correctedCoord - halfSize, isCircle); 
+      // the above line was erroneously: vec2 centreRel = mix(correctedCoord - halfSize, correctedCoord, isCircle) 
 
       // Normalised position: 0 at centre, 1 at edge
       float edgeNorm;
 
       // Circle/ellipse: elliptical distance from centre
-      vec2 ellipseNorm2 = centreRel / halfSize;
+      vec2 ellipseNorm2 = centreRel / halfSize; // halfSize;
       float ellipseNorm = length(ellipseNorm2);
 
       // Rectangle and others: rectangular distance (nearest edge)
