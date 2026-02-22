@@ -184,22 +184,21 @@ export function getShaderCode(): string {
     // When invertFeather is 0: 1 at centre, fades to 0 at edges.
     // When invertFeather is 1: 0 at centre, fades to 1 at edges.
     //
-    // COORDINATE ORIGINS vary by shape type:
-    //   Rectangles/images: correctedCoord ranges 0 → itemSize (origin at top-left)
-    //   Circles:           correctedCoord ranges -halfSize → +halfSize (origin at centre)
-    // We normalise both to centre-relative space before computing the fade.
+    // correctedCoord originates near the top-left of the attachment for all
+    // shape types. Subtracting halfSize converts it to centre-relative space
+    // where (0,0) is the geometric centre of the item.
 
     float computeFeather(vec2 correctedCoord) {
       if (feather <= 0.0) return 1.0;
 
       vec2 halfSize = itemSize * 0.5;
 
-      // Convert to centre-relative coordinates:
-      //   Circles (shapeType 1): already centred at (0,0)
-      //   Everything else: origin at top-left, shift by -halfSize
-      float isCircle = step(0.5, shapeType) * step(shapeType, 1.5); // step(0.5, shapeType) * step(shapeType, 1.5);
-      vec2 centreRel = mix(correctedCoord, correctedCoord - halfSize, isCircle);
-      // the above line was erroneously: vec2 centreRel = mix(correctedCoord - halfSize, correctedCoord, isCircle) 
+      // Convert to centre-relative coordinates.
+      // correctedCoord originates near the top-left of the attachment for all
+      // shape types; subtracting halfSize shifts the origin to the geometric centre.
+      // isCircle is kept only to select elliptical vs rectangular distance below.
+      float isCircle = step(0.5, shapeType) * step(shapeType, 1.5);
+      vec2 centreRel = correctedCoord - halfSize;
 
       // Normalised position: 0 at centre, 1 at edge
       float edgeNorm;

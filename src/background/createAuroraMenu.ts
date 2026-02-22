@@ -51,7 +51,9 @@ export function createAuroraMenu() {
     },
   });
 
-  // "Aurora Settings" — appears when item already has Aurora config
+  // "Aurora Settings" — appears when item already has Aurora config.
+  // No layer restriction: the effect persists if the item moves off MAP,
+  // so the settings popup must remain accessible on any layer.
   OBR.contextMenu.create({
     id: getPluginId("menu/settings"),
     icons: [
@@ -60,7 +62,6 @@ export function createAuroraMenu() {
         label: "Aurora Settings",
         filter: {
           every: [
-            { key: "layer", value: "MAP" },
             {
               key: ["metadata", CONFIG_KEY],
               value: undefined,

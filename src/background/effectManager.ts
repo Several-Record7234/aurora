@@ -57,6 +57,7 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
     item.rotation,
     item.scale.x, item.scale.y,
     item.visible, item.zIndex,
+    item.layer,
     item.type, shapeType, strokeWidth, shapeW, shapeH,
   ].join("|");
 }
@@ -125,6 +126,53 @@ interface ShapeCorrection {
 /** Bounds excess common to all shape types (selection handle padding) */
 const SHAPE_BOUNDS_EXCESS = 12;
 
+// ── Layer-based Z-Index ───────────────────────────────────────────
+//
+// POST_PROCESS effects from different parent layers all share a single
+// z-space. Without intervention OBR assigns z-indices that reflect only
+// the item's position within its own layer, so a MAP shader that is
+// moved (and therefore gets a high auto-z) could render on top of a
+// PROP or CHARACTER shader.
+//
+// We compose the effect z-index as:
+//   layerPriority * LAYER_Z_SCALE + parent.zIndex
+//
+// LAYER_Z_SCALE must exceed the maximum zIndex any single item is
+// expected to reach within its layer. 100 000 gives comfortable headroom.
+// disableAutoZIndex is set on the effect so OBR does not reassign it.
+
+/** Natural bottom-to-top rendering order for all OBR canvas layers */
+const LAYER_PRIORITY: Partial<Record<string, number>> = {
+  MAP:          0,
+  GRID:         1,
+  DRAWING:      2,
+  PROP:         3,
+  MOUNT:        4,
+  CHARACTER:    5,
+  ATTACHMENT:   6,
+  NOTE:         7,
+  TEXT:         8,
+  RULER:        9,
+  FOG:         10,
+  POINTER:     11,
+  POST_PROCESS:12,
+  CONTROL:     13,
+  POPOVER:     14,
+};
+
+/** Z-index band width reserved per layer (must exceed max per-layer zIndex) */
+const LAYER_Z_SCALE = 100_000;
+
+/**
+ * Compose a z-index for a POST_PROCESS effect that encodes both the
+ * parent item's canvas layer and its within-layer z-order.
+ * MAP-parent effects always render below PROP-parent effects, etc.
+ */
+function getLayerZIndex(parent: Item): number {
+  const priority = LAYER_PRIORITY[parent.layer] ?? 0;
+  return priority * LAYER_Z_SCALE + parent.zIndex;
+}
+
 const SHAPE_CORRECTIONS: Record<string, ShapeCorrection> = {
   RECTANGLE: { excess: SHAPE_BOUNDS_EXCESS, mx: 0,     my: 0 },
   CIRCLE:    { excess: SHAPE_BOUNDS_EXCESS, mx: 1,     my: 1 },
@@ -161,11 +209,14 @@ async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
         y: -(item.position.y - bounds.min.y - corr.excess) + corr.my * item.height,
       };
 
-      // Attachment bounds size = getItemBounds extent
-      // (this is the coord space the shader operates in)
+      // Shader coord space size for feather calculations.
+      // The ATTACHMENT fill area extends corr.excess beyond the getItemBounds()
+      // box on each side (the inverse of the excess subtracted in coordOffset),
+      // so we add 2 * corr.excess to recover the true coord-space extent that
+      // the feather mask halfSize must be based on.
       const itemSize = {
-        x: bounds.max.x - bounds.min.x,
-        y: bounds.max.y - bounds.min.y,
+        x: bounds.max.x - bounds.min.x + 2 * corr.excess,
+        y: bounds.max.y - bounds.min.y + 2 * corr.excess,
       };
 
       return { coordOffset, itemSize, shapeType };
@@ -220,12 +271,13 @@ async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
  *    Required for access to the `uniform shader scene` built-in, which
  *    lets the shader sample the current rendered scene colour at each pixel.
  *
- * 5. Z-INDEX: copied from parent.zIndex
- *    The effect must render at the same z-order as its parent so that
- *    scene reordering (e.g. moving items forward/backward on the MAP
- *    layer) doesn't cause the shader to sample stale scene content.
- *    The snapshot cache includes zIndex so that z-order changes on the
- *    parent trigger an effect rebuild.
+ * 5. Z-INDEX: layer-priority × LAYER_Z_SCALE + parent.zIndex
+ *    All Aurora effects share the POST_PROCESS z-space. The composed
+ *    z-index ensures MAP-parent shaders always render below PROP-parent
+ *    shaders, etc., regardless of individual item z-order within each
+ *    layer. disableAutoZIndex prevents OBR from overriding this value
+ *    when items are moved. The snapshot includes both layer and zIndex
+ *    so any change to either triggers an effect rebuild.
  *
  * 6. disableAttachmentBehavior(["COPY"])
  *    Local items (effects) must not be copied when the parent is duplicated;
@@ -245,7 +297,7 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
     .rotation(parent.rotation)
     .scale(parent.scale)
     .visible(parent.visible)
-    .zIndex(parent.zIndex)
+    .zIndex(getLayerZIndex(parent))
     .locked(true)
     .disableHit(true)
     .disableAttachmentBehavior(["COPY"])
@@ -256,6 +308,8 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
   effect.uniforms = getShaderUniforms(config, await getShaderGeometry(parent));
 
   effect.layer = "POST_PROCESS";
+  // Prevent OBR's auto-z-index from overriding the layer-composed value set above
+  effect.disableAutoZIndex = true;
 
   // Tag with metadata so we can find/manage this effect later
   effect.metadata = {
@@ -288,14 +342,15 @@ async function reconcileEffects(items: Item[]): Promise<void> {
       }
     }
 
-    // Items that should have effects — any MAP-layer item with Aurora config
+    // Items that should have effects — any item with Aurora config, regardless
+    // of layer. "Add Aurora" is restricted to MAP-layer items in the context
+    // menu (giving GM-only access by default), but once added the effect
+    // persists if the item is later moved to another layer (e.g. Prop).
     const auroraItems = new Map<string, { item: Item; config: AuroraConfig }>();
     for (const item of items) {
-      if (item.layer === "MAP") {
-        const config = item.metadata[CONFIG_KEY];
-        if (isAuroraConfig(config)) {
-          auroraItems.set(item.id, { item, config });
-        }
+      const config = item.metadata[CONFIG_KEY];
+      if (isAuroraConfig(config)) {
+        auroraItems.set(item.id, { item, config });
       }
     }
 

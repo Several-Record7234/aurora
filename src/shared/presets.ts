@@ -57,6 +57,8 @@ export async function saveToPresetSlot(
     h: values.h,
     o: values.o,
     b: values.b ?? 0,
+    f: values.f ?? 0,
+    fi: values.fi ?? false,
   };
   await savePresets(presets);
 }

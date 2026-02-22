@@ -6,17 +6,19 @@
  *   - AuroraConfig: per-item metadata (HSLO + enabled flag + blend mode)
  *   - Preset:       a saved HSLO snapshot with a user-facing name
  *
- * Field names are kept deliberately short (s, l, h, o, e, b, n) because they
- * are serialised into Owlbear Rodeo metadata and transmitted over the wire.
+ * Field names are kept deliberately short (s, l, h, o, e, b, f, fi, n) because
+ * they are serialised into Owlbear Rodeo metadata and transmitted over the wire.
  *
  * FIELD GLOSSARY:
- *   s — Saturation   (0–200, 100 = no change)
- *   l — Lightness    (0–200, 100 = no change)
- *   h — Hue          (-180–180, degrees on the colour wheel)
- *   o — Opacity      (0–100, tint overlay strength)
- *   e — Enabled      (boolean toggle without losing slider values)
- *   b — Blend mode   (0–4, index into BLEND_MODES)
- *   n — Name         (user-facing preset label)
+ *   s  — Saturation    (0–200, 100 = no change)
+ *   l  — Lightness     (0–200, 100 = no change)
+ *   h  — Hue           (-180–180, degrees on the colour wheel)
+ *   o  — Opacity       (0–100, tint overlay strength)
+ *   e  — Enabled       (boolean toggle without losing slider values)
+ *   b  — Blend mode    (0–3, index into BLEND_MODES)
+ *   f  — Feather       (0–100, edge-fade zone as % of shape half-size)
+ *   fi — Feather invert (false = fade edges, true = fade centre)
+ *   n  — Name          (user-facing preset label)
  */
 
 // ── Blend Modes ───────────────────────────────────────────────────
@@ -77,8 +79,10 @@ export const DEFAULT_CONFIG: AuroraConfig = {
 export const MAX_PRESET_SLOTS = 6;
 
 export interface Preset extends HSLOValues {
-  n: string; // Name
-  b: number; // Blend mode index (see BLEND_MODES)
+  n: string;   // Name
+  b: number;   // Blend mode index (see BLEND_MODES)
+  f: number;   // Feather: 0 to 100 (% of shape half-size for edge fade)
+  fi: boolean; // Feather invert: false = fade edges, true = fade centre
 }
 
 export type Presets = Array<Preset | null>;
@@ -94,10 +98,10 @@ export const MAX_NAME_LENGTH = 16;
  * Blend modes: 0=Multiply, 1=Overlay, 2=Soft Light, 3=Color
  */
 export const DEFAULT_PRESETS: Presets = [
-  { n: "Midnight",    s: 25,  l: 30, h: 115,  o: 40, b: 3 },  // Color
-  { n: "Golden Hour", s: 120, l: 80, h: 30,   o: 20, b: 2 },  // Soft Light
-  { n: "Pre-Dawn",    s: 80,  l: 50, h: -150, o: 40, b: 3 },  // Color
-  { n: "Blood Moon",  s: 35,  l: 40, h: 0,    o: 50, b: 0 },  // Multiply
+  { n: "Midnight",    s: 25,  l: 30, h: 115,  o: 40, b: 3, f: 0, fi: false },  // Color
+  { n: "Golden Hour", s: 120, l: 80, h: 30,   o: 20, b: 2, f: 0, fi: false },  // Soft Light
+  { n: "Pre-Dawn",    s: 80,  l: 50, h: -150, o: 40, b: 3, f: 0, fi: false },  // Color
+  { n: "Blood Moon",  s: 35,  l: 40, h: 0,    o: 50, b: 0, f: 0, fi: false },  // Multiply
   null,
   null,
 ];

@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aurora Settings</title>
   <style>
+    /* ── Theme tokens (overridden at runtime by applyTheme() in menu/main.ts) ── */
+
+    :root {
+      --bg-default:    #f5f5f5;
+      --bg-paper:      white;
+      --bg-subtle:     #f0f0f0;
+      --text-primary:  #333;
+      --text-secondary:#666;
+      --border-color:  #e0e0e0;
+      --shadow:        0 1px 3px rgba(0,0,0,0.1);
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -14,8 +26,8 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       padding: 12px;
-      background: #f5f5f5;
-      color: #333;
+      background: var(--bg-default);
+      color: var(--text-primary);
       height: 100vh;
       overflow: hidden;
     }
@@ -38,7 +50,7 @@
     .header-title {
       font-size: 15px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: var(--text-primary);
     }
 
     .header-toggle {
@@ -50,7 +62,7 @@
     .toggle-label {
       font-weight: 500;
       font-size: 12px;
-      color: #666;
+      color: var(--text-secondary);
     }
 
     .toggle-switch {
@@ -91,11 +103,11 @@
     .preset-select {
       width: 100%;
       padding: 6px 8px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--border-color);
       border-radius: 4px;
       font-size: 12px;
-      background: white;
-      color: #333;
+      background: var(--bg-paper);
+      color: var(--text-primary);
       margin-bottom: 6px;
     }
 
@@ -124,7 +136,7 @@
     .section-header {
       font-size: 11px;
       font-weight: 600;
-      color: #999;
+      color: var(--text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-top: 10px;
@@ -147,18 +159,18 @@
       justify-content: space-between;
       margin-bottom: 2px;
       font-size: 12px;
-      color: #666;
+      color: var(--text-secondary);
     }
 
     .slider-value {
       font-weight: 600;
-      color: #1a1a1a;
+      color: var(--text-primary);
     }
 
     input[type="range"] {
       width: 100%;
       height: 5px;
-      background: #e0e0e0;
+      background: var(--border-color);
       border-radius: 3px;
       outline: none;
       -webkit-appearance: none;
@@ -191,24 +203,24 @@
       align-items: center;
       margin-bottom: 2px;
       font-size: 12px;
-      color: #666;
+      color: var(--text-secondary);
     }
 
     .blend-select {
       width: 100%;
       padding: 5px 8px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--border-color);
       border-radius: 4px;
       font-size: 12px;
-      background: white;
-      color: #333;
+      background: var(--bg-paper);
+      color: var(--text-primary);
     }
 
     /* ── Divider ─────────────────────────── */
 
     .divider {
       height: 1px;
-      background: #e0e0e0;
+      background: var(--border-color);
       margin: 10px 0;
     }
 
@@ -248,12 +260,12 @@
     .invert-btn {
       flex-shrink: 0;
       padding: 4px 10px;
-      border: 2px solid #e0e0e0;
+      border: 2px solid var(--border-color);
       border-radius: 6px;
       background: none;
       font-size: 11px;
       font-weight: 500;
-      color: #666;
+      color: var(--text-secondary);
       cursor: pointer;
       transition: background 0.2s, border-color 0.2s, color 0.2s;
     }
@@ -281,7 +293,7 @@
     }
 
     .save-dialog {
-      background: white;
+      background: var(--bg-paper);
       border-radius: 8px;
       padding: 16px;
       width: 240px;
@@ -295,7 +307,7 @@
 
     .save-dialog label {
       font-size: 12px;
-      color: #666;
+      color: var(--text-secondary);
       display: block;
       margin-bottom: 4px;
     }
@@ -304,10 +316,12 @@
     .save-dialog input[type="text"] {
       width: 100%;
       padding: 6px 8px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--border-color);
       border-radius: 4px;
       font-size: 12px;
       margin-bottom: 10px;
+      background: var(--bg-default);
+      color: var(--text-primary);
     }
 
     .save-dialog-buttons {
@@ -325,8 +339,8 @@
     }
 
     .save-dialog-buttons .cancel {
-      background: #eee;
-      color: #333;
+      background: var(--bg-subtle);
+      color: var(--text-primary);
     }
 
     .save-dialog-buttons .confirm {

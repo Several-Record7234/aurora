@@ -13,7 +13,7 @@
  * which triggers the normal reconcile path and syncs to all clients.
  */
 
-import OBR, { Effect } from "@owlbear-rodeo/sdk";
+import OBR, { Effect, Theme } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
 import {
   AuroraConfig,
@@ -28,6 +28,20 @@ import {
 } from "../shared/types";
 import { getShaderUniforms } from "../shared/shader";
 import { loadPresets, saveToPresetSlot, getPresetsKey } from "../shared/presets";
+
+// ── Theme ──────────────────────────────────────────────────────────
+
+function applyTheme(theme: Theme): void {
+  const root = document.documentElement;
+  const isDark = theme.mode === "DARK";
+  root.style.setProperty("--bg-default", theme.background.default);
+  root.style.setProperty("--bg-paper", theme.background.paper);
+  root.style.setProperty("--text-primary", theme.text.primary);
+  root.style.setProperty("--text-secondary", theme.text.secondary);
+  root.style.setProperty("--border-color", isDark ? "rgba(255,255,255,0.12)" : "#e0e0e0");
+  root.style.setProperty("--bg-subtle", isDark ? "rgba(255,255,255,0.06)" : "#f0f0f0");
+  root.style.setProperty("--shadow", isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.1)");
+}
 
 const CONFIG_KEY = getPluginId("config");
 const EFFECT_META_KEY = getPluginId("isEffect");
@@ -158,8 +172,13 @@ async function readConfigFromItems(): Promise<AuroraConfig> {
   for (const item of items) {
     const config = item.metadata[CONFIG_KEY];
     if (isAuroraConfig(config)) {
-      // Ensure backwards compatibility: older configs may lack blend mode
-      const withDefaults: AuroraConfig = { ...config, b: config.b ?? 0 };
+      // Ensure backwards compatibility: older configs may lack b, f, fi
+      const withDefaults: AuroraConfig = {
+        ...config,
+        b:  config.b  ?? 0,
+        f:  config.f  ?? 0,
+        fi: config.fi ?? false,
+      };
       return withDefaults;
     }
   }
@@ -220,7 +239,9 @@ function findMatchingPreset(): number {
       p.l === currentConfig.l &&
       p.h === currentConfig.h &&
       p.o === currentConfig.o &&
-      (p.b ?? 3) === (currentConfig.b ?? 3)
+      (p.b  ?? 3)     === (currentConfig.b  ?? 3) &&
+      (p.f  ?? 0)     === (currentConfig.f  ?? 0) &&
+      (p.fi ?? false) === (currentConfig.fi ?? false)
   );
 }
 
@@ -307,7 +328,10 @@ function updatePresetDropdown() {
       const option = document.createElement("option");
       option.value = index.toString();
       const blendLabel = BLEND_MODES.find((m) => m.value === (preset.b ?? 3))?.label ?? "Color";
-      option.textContent = `${preset.n} (S:${preset.s} L:${preset.l} H:${preset.h} O:${preset.o} \u2022 ${blendLabel})`;
+      const featherStr = (preset.f ?? 0) > 0
+        ? ` F:${preset.f}%${preset.fi ? "\u21BA" : ""}`
+        : "";
+      option.textContent = `${preset.n} (S:${preset.s} L:${preset.l} H:${preset.h} O:${preset.o}${featherStr} \u2022 ${blendLabel})`;
       ui!.presetSelect.appendChild(option);
     }
   });
@@ -402,14 +426,14 @@ function setupEventListeners() {
     const preset = presets[index];
     if (!preset) return;
 
-    // Apply preset values (S, L, H, O, B), keeping current enabled state
-    // and feather settings (feather is per-item, not part of presets)
+    // Apply all preset values (S, L, H, O, B, F, Fi), keeping only the
+    // current enabled state (which is per-item, not part of presets)
     currentConfig = {
       s: preset.s, l: preset.l, h: preset.h, o: preset.o,
       e: currentConfig.e,
-      b: preset.b ?? currentConfig.b,
-      f: currentConfig.f ?? 0,
-      fi: currentConfig.fi ?? false,
+      b:  preset.b  ?? currentConfig.b,
+      f:  preset.f  ?? 0,
+      fi: preset.fi ?? false,
     };
     updateUI();
     await writeConfigToItems();
@@ -523,6 +547,11 @@ OBR.onReady(async () => {
     console.error("Aurora menu: Required DOM elements not found");
     return;
   }
+
+  // Apply OBR theme tokens and subscribe to live changes
+  const theme = await OBR.theme.getTheme();
+  applyTheme(theme);
+  OBR.theme.onChange(applyTheme);
 
   // Populate the blend mode dropdown from the shared constant
   populateBlendModes();
