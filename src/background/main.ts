@@ -13,8 +13,21 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { createAuroraMenu } from "./createAuroraMenu";
 import { startEffectManager } from "./effectManager";
+import { migrateMetadata, migrateItemMetadata } from "./migrateMetadata";
 
-OBR.onReady(() => {
+OBR.onReady(async () => {
+  // Migrate old "com.aurora-vtt.aurora/*" keys before anything reads them.
+  // REMOVABLE: see migrateMetadata.ts header comment.
+  await migrateMetadata();
+
   createAuroraMenu();
+  // startEffectManager() returns a cleanup function; the background page
+  // lives for the entire session so we don't need to capture it.
   startEffectManager();
+
+  // Also migrate item metadata when the user switches to a different scene.
+  // REMOVABLE: see migrateMetadata.ts header comment.
+  OBR.scene.onReadyChange(async (ready) => {
+    if (ready) await migrateItemMetadata();
+  });
 });

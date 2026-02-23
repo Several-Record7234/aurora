@@ -1,0 +1,34 @@
+/**
+ * Aurora – shared CSS tokens and reset rules.
+ *
+ * Theme tokens are overridden at runtime by applyTheme() in shared/theme.ts.
+ * Imported by both index.html and menu.html via <link>.
+ */
+
+:root {
+  /* Theme tokens (overridden at runtime by applyTheme) */
+  --bg-default:    #f5f5f5;
+  --bg-paper:      white;
+  --bg-subtle:     #f0f0f0;
+  --text-primary:  #333;
+  --text-secondary:#666;
+  --border-color:  #e0e0e0;
+  --shadow:        0 1px 3px rgba(0,0,0,0.1);
+
+  /* Accent palette — semantic role-based naming */
+  --accent-primary:        #2196F3;
+  --accent-primary-subtle: #E3F2FD;
+  --accent-primary-light:  #90CAF9;
+  --accent-danger:         #f44336;
+  --accent-danger-subtle:  #FFEBEE;
+  --accent-danger-light:   #EF9A9A;
+  --accent-success:        #4CAF50;
+  --accent-success-dark:   #388E3C;
+  --accent-invert:         #7E57C2;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}

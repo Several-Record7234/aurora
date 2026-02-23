@@ -19,19 +19,9 @@
  */
 
 import OBR, { buildEffect, Effect, Item, isShape } from "@owlbear-rodeo/sdk";
-import { getPluginId } from "../shared/pluginId";
 import { getShaderCode, getShaderUniforms, ShaderGeometry, SHAPE_TYPE_RECT, SHAPE_TYPE_CIRCLE, SHAPE_TYPE_TRIANGLE, SHAPE_TYPE_HEXAGON } from "../shared/shader";
 import { AuroraConfig, isAuroraConfig } from "../shared/types";
-
-// ── Metadata Keys ─────────────────────────────────────────────────
-
-const CONFIG_KEY = getPluginId("config");
-const EFFECT_META_KEY = getPluginId("isEffect");
-
-/** Tag stored on local effects so we can link them back to their source item */
-function effectSourceKey(): string {
-  return getPluginId("sourceItemId");
-}
+import { CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY } from "../shared/keys";
 
 // ── Effect Snapshot Cache ─────────────────────────────────────────
 //
@@ -41,6 +31,12 @@ function effectSourceKey(): string {
 // if they match we skip the item, avoiding needless delete-then-add
 // cycles. This means scale, position, rotation, and visibility changes
 // on the parent item will also trigger an effect rebuild.
+//
+// NOTE: item.zIndex is deliberately excluded. OBR auto-bumps zIndex
+// when items are moved or selected, which would cause constant effect
+// rebuilds and z-index drift. The effect's z-index is set once at
+// creation via getLayerZIndex() and stays stable thereafter.
+// disableAutoZIndex on the effect prevents OBR from overriding it.
 
 const snapshotCache = new Map<string, string>();
 
@@ -56,7 +52,7 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
     item.position.x, item.position.y,
     item.rotation,
     item.scale.x, item.scale.y,
-    item.visible, item.zIndex,
+    item.visible,
     item.layer,
     item.type, shapeType, strokeWidth, shapeW, shapeH,
   ].join("|");
@@ -134,11 +130,16 @@ const SHAPE_BOUNDS_EXCESS = 12;
 // moved (and therefore gets a high auto-z) could render on top of a
 // PROP or CHARACTER shader.
 //
-// We compose the effect z-index as:
-//   layerPriority * LAYER_Z_SCALE + parent.zIndex
+// We divide the safe-integer range into equal bands — one per layer —
+// and map each effect's z-index into the band for its parent's layer:
 //
-// LAYER_Z_SCALE must exceed the maximum zIndex any single item is
-// expected to reach within its layer. 100 000 gives comfortable headroom.
+//   zIndex = layerPriority * LAYER_BAND_SIZE + (parent.zIndex % LAYER_BAND_SIZE)
+//
+// LAYER_BAND_SIZE ≈ 600 trillion, which is far larger than any zIndex
+// OBR assigns (observed values reach ~1.77 trillion). The modulo keeps
+// the parent's z-order within the band, preserving relative ordering of
+// effects whose parents share a layer.
+//
 // disableAutoZIndex is set on the effect so OBR does not reassign it.
 
 /** Natural bottom-to-top rendering order for all OBR canvas layers */
@@ -160,17 +161,25 @@ const LAYER_PRIORITY: Partial<Record<string, number>> = {
   POPOVER:     14,
 };
 
-/** Z-index band width reserved per layer (must exceed max per-layer zIndex) */
-const LAYER_Z_SCALE = 100_000;
+/** Number of layer priority levels (must match the highest value in LAYER_PRIORITY + 1) */
+const LAYER_COUNT = 15;
+
+/** Size of each layer's z-index band (≈ 600 trillion) */
+const LAYER_BAND_SIZE = Math.floor(Number.MAX_SAFE_INTEGER / LAYER_COUNT);
 
 /**
  * Compose a z-index for a POST_PROCESS effect that encodes both the
  * parent item's canvas layer and its within-layer z-order.
  * MAP-parent effects always render below PROP-parent effects, etc.
+ *
+ * The parent's zIndex is mapped into the layer's band via modulo,
+ * so even very large OBR-assigned z-indices (observed up to ~1.77T)
+ * are handled correctly without overflowing into adjacent bands.
  */
 function getLayerZIndex(parent: Item): number {
   const priority = LAYER_PRIORITY[parent.layer] ?? 0;
-  return priority * LAYER_Z_SCALE + parent.zIndex;
+  const withinBand = ((parent.zIndex % LAYER_BAND_SIZE) + LAYER_BAND_SIZE) % LAYER_BAND_SIZE;
+  return priority * LAYER_BAND_SIZE + withinBand;
 }
 
 const SHAPE_CORRECTIONS: Record<string, ShapeCorrection> = {
@@ -219,9 +228,27 @@ async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
         y: bounds.max.y - bounds.min.y + 2 * corr.excess,
       };
 
-      return { coordOffset, itemSize, shapeType };
+      // shapeSize: the actual visual dimensions of the shape, used by
+      // hex/triangle SDFs in the feather mask. Rectangles and circles
+      // fill their full attachment bounds so shapeSize = itemSize.
+      // Hexagons are regular (all sides equal) and inscribed within
+      // item.width × item.height, so their visual extent differs from
+      // the attachment bounds (which include stroke + excess padding).
+      let shapeSize = itemSize;
+      if (obrShapeType === "HEXAGON") {
+        // Pointy-top regular hex: circumradius = height/2,
+        // inradius = circumradius × sqrt(3)/2
+        const circumR = item.height / 2;
+        const inR = circumR * Math.sqrt(3) / 2;
+        shapeSize = { x: inR * 2, y: circumR * 2 };
+      } else if (obrShapeType === "TRIANGLE") {
+        // Isoceles triangle fills item.width × item.height
+        shapeSize = { x: item.width, y: item.height };
+      }
+
+      return { coordOffset, itemSize, shapeSize, shapeType };
     } catch {
-      return { coordOffset: { x: 0, y: 0 }, itemSize: { x: 1, y: 1 }, shapeType };
+      return { coordOffset: { x: 0, y: 0 }, itemSize: { x: 1, y: 1 }, shapeSize: { x: 1, y: 1 }, shapeType };
     }
   }
 
@@ -230,16 +257,18 @@ async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
   // the rendered bounds. We use getItemBounds for consistency.
   try {
     const bounds = await OBR.scene.items.getItemBounds([item.id]);
+    const size = {
+      x: bounds.max.x - bounds.min.x,
+      y: bounds.max.y - bounds.min.y,
+    };
     return {
       coordOffset: { x: 0, y: 0 },
-      itemSize: {
-        x: bounds.max.x - bounds.min.x,
-        y: bounds.max.y - bounds.min.y,
-      },
+      itemSize: size,
+      shapeSize: size,
       shapeType,
     };
   } catch {
-    return { coordOffset: { x: 0, y: 0 }, itemSize: { x: 1, y: 1 }, shapeType };
+    return { coordOffset: { x: 0, y: 0 }, itemSize: { x: 1, y: 1 }, shapeSize: { x: 1, y: 1 }, shapeType };
   }
 }
 
@@ -271,13 +300,14 @@ async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
  *    Required for access to the `uniform shader scene` built-in, which
  *    lets the shader sample the current rendered scene colour at each pixel.
  *
- * 5. Z-INDEX: layer-priority × LAYER_Z_SCALE + parent.zIndex
- *    All Aurora effects share the POST_PROCESS z-space. The composed
- *    z-index ensures MAP-parent shaders always render below PROP-parent
- *    shaders, etc., regardless of individual item z-order within each
- *    layer. disableAutoZIndex prevents OBR from overriding this value
- *    when items are moved. The snapshot includes both layer and zIndex
- *    so any change to either triggers an effect rebuild.
+ * 5. Z-INDEX: layerPriority × LAYER_BAND_SIZE + (parent.zIndex % LAYER_BAND_SIZE)
+ *    All Aurora effects share the POST_PROCESS z-space. The safe-integer
+ *    range is divided into equal bands per layer so that MAP-parent
+ *    shaders always render below PROP-parent shaders, etc., even when
+ *    parent z-indices are very large (observed up to ~1.77 trillion).
+ *    disableAutoZIndex prevents OBR from overriding this value when
+ *    items are moved. The snapshot includes both layer and zIndex so
+ *    any change to either triggers an effect rebuild.
  *
  * 6. disableAttachmentBehavior(["COPY"])
  *    Local items (effects) must not be copied when the parent is duplicated;
@@ -314,13 +344,22 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
   // Tag with metadata so we can find/manage this effect later
   effect.metadata = {
     [EFFECT_META_KEY]: true,
-    [effectSourceKey()]: parent.id,
+    [EFFECT_SOURCE_KEY]: parent.id,
   };
 
   return effect;
 }
 
 // ── Reconciliation ────────────────────────────────────────────────
+
+/**
+ * Re-entrancy guard: if a reconcile is already in progress when a new
+ * onChange fires, we stash the latest items and run one more pass after
+ * the current one finishes. This prevents overlapping SDK calls without
+ * dropping the most recent state.
+ */
+let reconciling = false;
+let pendingItems: Item[] | null = null;
 
 /**
  * Reconcile all Aurora effects with the current scene state.
@@ -330,13 +369,19 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
  * since the last pass, and batches all SDK add/delete calls.
  */
 async function reconcileEffects(items: Item[]): Promise<void> {
+  if (reconciling) {
+    pendingItems = items;
+    return;
+  }
+  reconciling = true;
+
   try {
     const existingEffects = await findAllEffects();
 
     // Build a lookup of existing effects by source item ID
     const effectsBySource = new Map<string, Item>();
     for (const e of existingEffects) {
-      const sourceId = e.metadata[effectSourceKey()] as string | undefined;
+      const sourceId = e.metadata[EFFECT_SOURCE_KEY] as string | undefined;
       if (sourceId) {
         effectsBySource.set(sourceId, e);
       }
@@ -368,7 +413,8 @@ async function reconcileEffects(items: Item[]): Promise<void> {
 
     // ── Determine which effects to create / recreate ────────────
 
-    const effectsToAdd: Effect[] = [];
+    // Collect items that need new effects, then build them in parallel
+    const toBuild: Array<{ itemId: string; item: Item; config: AuroraConfig; snap: string }> = [];
 
     for (const [itemId, { item, config }] of auroraItems) {
       const snap = effectSnapshot(config, item);
@@ -387,13 +433,18 @@ async function reconcileEffects(items: Item[]): Promise<void> {
       }
 
       if (config.e) {
-        effectsToAdd.push(await buildAuroraEffect(item, config));
+        toBuild.push({ itemId, item, config, snap });
       }
 
       // Update cache (even for disabled configs, so we don't keep
       // trying to recreate them on every reconcile)
       snapshotCache.set(itemId, snap);
     }
+
+    // Build all new effects in parallel (each calls getItemBounds)
+    const effectsToAdd = await Promise.all(
+      toBuild.map(({ item, config }) => buildAuroraEffect(item, config))
+    );
 
     // ── Execute batched SDK operations ──────────────────────────
 
@@ -406,6 +457,13 @@ async function reconcileEffects(items: Item[]): Promise<void> {
     }
   } catch (err) {
     console.error("Aurora: reconcileEffects failed, will retry on next change", err);
+  } finally {
+    reconciling = false;
+    if (pendingItems) {
+      const next = pendingItems;
+      pendingItems = null;
+      reconcileEffects(next);
+    }
   }
 }
 

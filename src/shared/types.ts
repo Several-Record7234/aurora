@@ -56,22 +56,22 @@ export interface HSLOValues {
 
 /** Stored under getPluginId("config") on each map-layer item */
 export interface AuroraConfig extends HSLOValues {
-  e: boolean; // Enabled (allows toggling without losing values)
-  b: number;  // Blend mode index (see BLEND_MODES)
-  f: number;  // Feather: 0 to 100 (% of radius for edge fade)
-  fi: boolean; // Feather invert: false = fade edges, true = fade centre
+  e: boolean;          // Enabled (allows toggling without losing values)
+  b?: BlendModeValue;  // Blend mode index (see BLEND_MODES); absent in older configs
+  f?: number;          // Feather: 0 to 100 (% of radius for edge fade); absent in older configs
+  fi?: boolean;        // Feather invert: false = fade edges, true = fade centre; absent in older configs
 }
 
-export const DEFAULT_CONFIG: AuroraConfig = {
+export const DEFAULT_CONFIG: Readonly<AuroraConfig> = Object.freeze({
   s: 100,
   l: 100,
   h: 0,
   o: 0,
   e: true,
-  b: 3,  // Color blend mode
+  b: 3 as BlendModeValue,  // Color blend mode
   f: 0,  // No feather
   fi: false,
-};
+});
 
 // ── Presets (stored in room metadata) ─────────────────────────────
 
@@ -79,15 +79,15 @@ export const DEFAULT_CONFIG: AuroraConfig = {
 export const MAX_PRESET_SLOTS = 6;
 
 export interface Preset extends HSLOValues {
-  n: string;   // Name
-  b: number;   // Blend mode index (see BLEND_MODES)
-  f: number;   // Feather: 0 to 100 (% of shape half-size for edge fade)
-  fi: boolean; // Feather invert: false = fade edges, true = fade centre
+  n: string;          // Name
+  b?: BlendModeValue; // Blend mode index (see BLEND_MODES); absent in older presets
+  f?: number;         // Feather: 0 to 100 (% of shape half-size for edge fade)
+  fi?: boolean;       // Feather invert: false = fade edges, true = fade centre
 }
 
 export type Presets = Array<Preset | null>;
 
-export const EMPTY_PRESETS: Presets = Array(MAX_PRESET_SLOTS).fill(null);
+export const EMPTY_PRESETS: readonly (Preset | null)[] = Object.freeze(Array(MAX_PRESET_SLOTS).fill(null));
 export const MAX_NAME_LENGTH = 16;
 
 /**
@@ -97,14 +97,14 @@ export const MAX_NAME_LENGTH = 16;
  *
  * Blend modes: 0=Multiply, 1=Overlay, 2=Soft Light, 3=Color
  */
-export const DEFAULT_PRESETS: Presets = [
-  { n: "Midnight",    s: 25,  l: 30, h: 115,  o: 40, b: 3, f: 0, fi: false },  // Color
-  { n: "Golden Hour", s: 120, l: 80, h: 30,   o: 20, b: 2, f: 0, fi: false },  // Soft Light
-  { n: "Pre-Dawn",    s: 80,  l: 50, h: -150, o: 40, b: 3, f: 0, fi: false },  // Color
-  { n: "Blood Moon",  s: 35,  l: 40, h: 0,    o: 50, b: 0, f: 0, fi: false },  // Multiply
+export const DEFAULT_PRESETS: readonly (Preset | null)[] = Object.freeze([
+  { n: "Midnight",    s: 25,  l: 30, h: -115,  o: 40, b: 3 as BlendModeValue, f: 0, fi: false },  // Color
+  { n: "Golden Hour", s: 120, l: 80, h: 30,   o: 20, b: 2 as BlendModeValue, f: 0, fi: false },  // Soft Light
+  { n: "Pre-Dawn",    s: 80,  l: 50, h: -150, o: 40, b: 3 as BlendModeValue, f: 0, fi: false },  // Color
+  { n: "Blood Moon",  s: 35,  l: 40, h: 0,    o: 50, b: 0 as BlendModeValue, f: 0, fi: false },  // Multiply
   null,
   null,
-];
+]);
 
 // ── Type Guards ───────────────────────────────────────────────────
 
@@ -130,7 +130,7 @@ export function isAuroraConfig(val: unknown): val is AuroraConfig {
  * extension or a metadata migration writes unexpected data to the key.
  */
 export function isPresets(val: unknown): val is Presets {
-  if (!Array.isArray(val)) return false;
+  if (!Array.isArray(val) || val.length === 0 || val.length > MAX_PRESET_SLOTS) return false;
   return val.every(
     (item) =>
       item === null ||

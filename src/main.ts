@@ -9,40 +9,27 @@
  * so they are visible to all players in the room.
  */
 
-import OBR, { Theme } from "@owlbear-rodeo/sdk";
+import OBR, { Item, isImage, isShape } from "@owlbear-rodeo/sdk";
 import {
   Presets,
   isPresets,
+  isAuroraConfig,
   EMPTY_PRESETS,
   MAX_NAME_LENGTH,
   BLEND_MODES,
 } from "./shared/types";
 import { loadPresets, savePresets, clearPresetSlot, getPresetsKey } from "./shared/presets";
-
-// ── Theme ──────────────────────────────────────────────────────────
-
-/**
- * Apply OBR theme tokens as CSS custom properties on the root element.
- * The CSS uses var() references with light-mode fallbacks, so this just
- * overrides them to match whatever theme OBR is currently using.
- */
-function applyTheme(theme: Theme): void {
-  const root = document.documentElement;
-  const isDark = theme.mode === "DARK";
-  root.style.setProperty("--bg-default", theme.background.default);
-  root.style.setProperty("--bg-paper", theme.background.paper);
-  root.style.setProperty("--text-primary", theme.text.primary);
-  root.style.setProperty("--text-secondary", theme.text.secondary);
-  root.style.setProperty("--border-color", isDark ? "rgba(255,255,255,0.12)" : "#e0e0e0");
-  root.style.setProperty("--bg-subtle", isDark ? "rgba(255,255,255,0.06)" : "#f0f0f0");
-  root.style.setProperty("--shadow", isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.1)");
-}
-
-// ── Constants ─────────────────────────────────────────────────────
+import { CONFIG_KEY, UI_STATE_KEY } from "./shared/keys";
+import { applyTheme } from "./shared/theme";
 
 /** Dimensions of the action popover (pixels) */
 const POPOVER_WIDTH = 350;
-const POPOVER_HEIGHT = 600;
+const POPOVER_HEIGHT = 680;
+
+/** Approximate height of the Help section (pixels) */
+const HELP_SECTION_HEIGHT = 100;
+/** Approximate height of the Scene Items section (pixels) */
+const SCENE_ITEMS_SECTION_HEIGHT = 100;
 
 // ── State ─────────────────────────────────────────────────────────
 
@@ -50,6 +37,84 @@ let presets: Presets = [...EMPTY_PRESETS];
 
 /** Current interaction mode: null = idle, "rename" or "clear" = awaiting preset click */
 let activeMode: "rename" | "clear" | null = null;
+
+// ── Scene Item List State (GM only) ───────────────────────────────
+
+interface SceneItemData {
+  id: string;
+  label: string;
+  enabled: boolean;
+  thumbType: "IMAGE" | "SHAPE" | "OTHER";
+  imageUrl?: string;
+  shapeType?: string;
+}
+
+/** Extract display data (label + thumbnail + enabled state) from an OBR scene item. */
+function extractItemData(item: Item): SceneItemData {
+  const label = item.name.trim() || `${item.layer} ${item.type}`;
+  const config = item.metadata[CONFIG_KEY];
+  const enabled = isAuroraConfig(config) ? config.e : true;
+  if (isImage(item)) {
+    return { id: item.id, label, enabled, thumbType: "IMAGE", imageUrl: item.image.url };
+  }
+  if (isShape(item)) {
+    return { id: item.id, label, enabled, thumbType: "SHAPE", shapeType: item.shapeType };
+  }
+  return { id: item.id, label, enabled, thumbType: "OTHER" };
+}
+
+let isGM = false;
+let helpCollapsed = false;
+let presetsCollapsed = false;
+let auroraSceneItems: SceneItemData[] = [];
+let itemsCollapsed = true;
+let unsubSceneItems: (() => void) | null = null;
+
+/** Shape of the persisted UI collapse state stored in room metadata. */
+interface UIState {
+  helpCollapsed: boolean;
+  presetsCollapsed: boolean;
+  itemsCollapsed: boolean;
+}
+
+function isUIState(v: unknown): v is UIState {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.helpCollapsed === "boolean" &&
+    typeof o.presetsCollapsed === "boolean" &&
+    typeof o.itemsCollapsed === "boolean"
+  );
+}
+
+/** Persist the current collapsed states to room metadata. */
+async function saveUIState(): Promise<void> {
+  const state: UIState = { helpCollapsed, presetsCollapsed, itemsCollapsed };
+  await OBR.room.setMetadata({ [UI_STATE_KEY]: state });
+}
+
+/**
+ * Apply collapsed states to the DOM elements.
+ * Called once after loading persisted state and on each toggle.
+ */
+function applyCollapsedStates(): void {
+  const helpBody = document.getElementById("helpBody");
+  const helpChevron = document.getElementById("helpChevron");
+  if (helpBody) helpBody.style.display = helpCollapsed ? "none" : "";
+  if (helpChevron) helpChevron.classList.toggle("collapsed", helpCollapsed);
+
+  const presetsBody = document.getElementById("presetsBody");
+  const presetsActions = document.getElementById("presetsActions");
+  const presetsChevron = document.getElementById("presetsChevron");
+  if (presetsBody) presetsBody.style.display = presetsCollapsed ? "none" : "";
+  if (presetsActions) presetsActions.style.display = (presetsCollapsed || !isGM) ? "none" : "";
+  if (presetsChevron) presetsChevron.classList.toggle("collapsed", presetsCollapsed);
+
+  const itemsBody = document.getElementById("sceneItemsBody");
+  const itemsChevron = document.getElementById("sceneItemsChevron");
+  if (itemsBody) itemsBody.style.display = itemsCollapsed ? "none" : "";
+  if (itemsChevron) itemsChevron.classList.toggle("collapsed", itemsCollapsed);
+}
 
 // ── DOM refs ──────────────────────────────────────────────────────
 
@@ -161,6 +226,7 @@ function renderPresets() {
 // ── Preset Click Handlers ─────────────────────────────────────────
 
 async function handlePresetClick(index: number) {
+  if (!isGM) return;
   if (activeMode === "rename") {
     showRenameDialog(index);
   } else if (activeMode === "clear") {
@@ -181,21 +247,36 @@ function showRenameDialog(index: number) {
 
   const dialog = document.createElement("div");
   dialog.className = "rename-dialog";
-  dialog.innerHTML = `
-    <h3>Rename Preset</h3>
-    <input type="text" id="renameInput" maxlength="${MAX_NAME_LENGTH}" value="${preset.n}">
-    <div class="rename-dialog-buttons">
-      <button class="cancel">Cancel</button>
-      <button class="confirm">Rename</button>
-    </div>
-  `;
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Rename Preset";
+  dialog.appendChild(heading);
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = MAX_NAME_LENGTH;
+  input.value = preset.n;
+  dialog.appendChild(input);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "rename-dialog-buttons";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "cancel";
+  cancelBtn.textContent = "Cancel";
+  const confirmBtn = document.createElement("button");
+  confirmBtn.className = "confirm";
+  confirmBtn.textContent = "Rename";
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(confirmBtn);
+  dialog.appendChild(btnRow);
 
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);
 
-  const input = document.getElementById("renameInput") as HTMLInputElement;
-  input.focus();
-  input.select();
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
 
   const close = () => {
     document.body.removeChild(overlay);
@@ -209,8 +290,8 @@ function showRenameDialog(index: number) {
     close();
   };
 
-  dialog.querySelector(".cancel")?.addEventListener("click", close);
-  dialog.querySelector(".confirm")?.addEventListener("click", doRename);
+  cancelBtn.addEventListener("click", close);
+  confirmBtn.addEventListener("click", doRename);
 
   // Enter key triggers rename
   input.addEventListener("keydown", (e) => {
@@ -234,6 +315,178 @@ function showRenameDialog(index: number) {
   });
 }
 
+// ── Scene Item List ───────────────────────────────────────────────
+
+/**
+ * Toggle the enabled state of an item's Aurora config.
+ * Reads the current config, flips the `e` flag, and writes it back.
+ * The onChange subscription will automatically update the list.
+ */
+async function toggleItemEnabled(itemId: string): Promise<void> {
+  await OBR.scene.items.updateItems([itemId], (items) => {
+    for (const item of items) {
+      const config = item.metadata[CONFIG_KEY];
+      if (isAuroraConfig(config)) {
+        item.metadata[CONFIG_KEY] = { ...config, e: !config.e };
+      }
+    }
+  });
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Build a 28×28 thumbnail element for a scene item.
+ *   IMAGE → <img> with object-fit: cover (from item.image.url)
+ *   SHAPE → inline SVG showing the actual shape outline
+ *   OTHER → dashed rectangle placeholder
+ */
+function buildThumb(data: SceneItemData): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.className = "scene-item-thumb";
+
+  // Image thumbnail
+  if (data.thumbType === "IMAGE" && data.imageUrl) {
+    const img = document.createElement("img");
+    img.src = data.imageUrl;
+    img.alt = "";
+    img.draggable = false;
+    wrap.appendChild(img);
+    return wrap;
+  }
+
+  // SVG icon for shapes and other item types
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 28 28");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+
+  if (data.thumbType === "SHAPE") {
+    switch (data.shapeType) {
+      case "CIRCLE": {
+        const el = document.createElementNS(SVG_NS, "circle");
+        el.setAttribute("cx", "14"); el.setAttribute("cy", "14"); el.setAttribute("r", "10");
+        svg.appendChild(el);
+        break;
+      }
+      case "TRIANGLE": {
+        const el = document.createElementNS(SVG_NS, "polygon");
+        el.setAttribute("points", "14,3 25,25 3,25");
+        svg.appendChild(el);
+        break;
+      }
+      case "HEXAGON": {
+        const el = document.createElementNS(SVG_NS, "polygon");
+        el.setAttribute("points", "14,2 24,8 24,20 14,26 4,20 4,8");
+        svg.appendChild(el);
+        break;
+      }
+      default: { // RECTANGLE and unknown shapes
+        const el = document.createElementNS(SVG_NS, "rect");
+        el.setAttribute("x", "4"); el.setAttribute("y", "4");
+        el.setAttribute("width", "20"); el.setAttribute("height", "20");
+        el.setAttribute("rx", "2");
+        svg.appendChild(el);
+        break;
+      }
+    }
+  } else {
+    // OTHER: dashed rectangle placeholder
+    const el = document.createElementNS(SVG_NS, "rect");
+    el.setAttribute("x", "4"); el.setAttribute("y", "4");
+    el.setAttribute("width", "20"); el.setAttribute("height", "20");
+    el.setAttribute("rx", "2"); el.setAttribute("stroke-dasharray", "4 2");
+    svg.appendChild(el);
+  }
+
+  wrap.appendChild(svg);
+  return wrap;
+}
+
+function renderSceneItems(): void {
+  const list = document.getElementById("sceneItemsList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const countBadge = document.getElementById("sceneItemsCount");
+  if (countBadge) countBadge.textContent = String(auroraSceneItems.length);
+
+  if (auroraSceneItems.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "scene-item-empty";
+    empty.textContent = "No Aurora effects in this scene";
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const data of auroraSceneItems) {
+    const row = document.createElement("div");
+    row.className = "scene-item-row";
+    row.title = data.label;
+
+    row.appendChild(buildThumb(data));
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "scene-item-label";
+    labelEl.textContent = data.label;
+    row.appendChild(labelEl);
+
+    // Enable/disable toggle (same visual as context menu's master toggle)
+    const toggle = document.createElement("div");
+    toggle.className = "scene-item-toggle" + (data.enabled ? " active" : "");
+    toggle.title = data.enabled ? "Disable effect" : "Enable effect";
+    const slider = document.createElement("div");
+    slider.className = "scene-item-toggle-slider";
+    toggle.appendChild(slider);
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation(); // Don't trigger row select
+      toggleItemEnabled(data.id);
+    });
+    toggle.addEventListener("dblclick", (e) => {
+      e.stopPropagation(); // Don't trigger row viewport-centre
+    });
+    row.appendChild(toggle);
+
+    // Single click — select the item
+    row.addEventListener("click", () => {
+      OBR.player.select([data.id], true);
+    });
+
+    // Double click — select and centre the viewport on the item
+    row.addEventListener("dblclick", async () => {
+      OBR.player.select([data.id], true);
+      try {
+        const bounds = await OBR.scene.items.getItemBounds([data.id]);
+        await OBR.viewport.animateToBounds(bounds);
+      } catch {
+        // Viewport centering failed — selection still worked
+      }
+    });
+
+    list.appendChild(row);
+  }
+}
+
+async function loadSceneItems(): Promise<void> {
+  try {
+    const items = await OBR.scene.items.getItems();
+    auroraSceneItems = items
+      .filter((item) => isAuroraConfig(item.metadata[CONFIG_KEY]))
+      .map(extractItemData);
+  } catch {
+    auroraSceneItems = [];
+  }
+  renderSceneItems();
+}
+
+function showSceneItemsSection(show: boolean): void {
+  const section = document.getElementById("sceneItemsSection");
+  if (section) section.style.display = show ? "" : "none";
+}
+
 // ── Initialization ────────────────────────────────────────────────
 
 OBR.onReady(async () => {
@@ -245,7 +498,39 @@ OBR.onReady(async () => {
   // Apply OBR theme tokens and subscribe to live changes
   const theme = await OBR.theme.getTheme();
   applyTheme(theme);
-  OBR.theme.onChange(applyTheme);
+  const unsubTheme = OBR.theme.onChange(applyTheme);
+
+  // Load persisted UI collapse states from room metadata
+  {
+    const roomMeta = await OBR.room.getMetadata();
+    const saved = roomMeta[UI_STATE_KEY];
+    if (isUIState(saved)) {
+      helpCollapsed = saved.helpCollapsed;
+      presetsCollapsed = saved.presetsCollapsed;
+      itemsCollapsed = saved.itemsCollapsed;
+    }
+    // Defaults (helpCollapsed=false, presetsCollapsed=false, itemsCollapsed=true)
+    // are already set in the state declarations above.
+    applyCollapsedStates();
+  }
+
+  // Collapsible Help section
+  document.getElementById("helpHeader")?.addEventListener("click", () => {
+    helpCollapsed = !helpCollapsed;
+    applyCollapsedStates();
+    saveUIState();
+  });
+
+  // Collapsible Presets section
+  document.getElementById("presetsHeader")?.addEventListener("click", (e) => {
+    // Don't collapse when clicking the Rename/Clear action buttons
+    if ((e.target as HTMLElement).closest(".presets-actions")) return;
+    presetsCollapsed = !presetsCollapsed;
+    // Cancel rename/clear mode if collapsing while active
+    if (presetsCollapsed && activeMode) exitMode();
+    applyCollapsedStates();
+    saveUIState();
+  });
 
   // Resolve DOM
   renameModeBtn = document.getElementById("renameModeBtn") as HTMLButtonElement;
@@ -260,11 +545,80 @@ OBR.onReady(async () => {
   renderPresets();
 
   // Sync if presets change externally (e.g. saved from a context menu)
-  OBR.room.onMetadataChange((metadata) => {
+  const unsubRoomMeta = OBR.room.onMetadataChange((metadata) => {
     const data = metadata[getPresetsKey()];
     if (isPresets(data)) {
       presets = data;
       renderPresets();
     }
+  });
+
+  // ── Scene Item List (GM only) ────────────────────────────────────
+
+  isGM = (await OBR.player.getRole()) === "GM";
+  showSceneItemsSection(isGM);
+
+  // Hide "How to Use" section when the player has no MAP layer permissions
+  // (the instructions are about right-clicking MAP items, which is irrelevant
+  // if the room denies MAP_CREATE and MAP_UPDATE).
+  if (!isGM) {
+    const permissions = await OBR.room.getPermissions();
+    const hasMapAccess = permissions.includes("MAP_CREATE") || permissions.includes("MAP_UPDATE");
+    if (!hasMapAccess) {
+      const helpSection = document.getElementById("helpHeader")?.parentElement;
+      if (helpSection) helpSection.style.display = "none";
+    }
+
+    // Hide preset Rename/Clear buttons for non-GMs
+    const presetsActions = document.getElementById("presetsActions");
+    if (presetsActions) presetsActions.style.display = "none";
+
+    // Shrink the popover — players don't see Help (if no MAP access) or Scene Items
+    await OBR.action.setHeight(hasMapAccess
+      ? POPOVER_HEIGHT - SCENE_ITEMS_SECTION_HEIGHT
+      : POPOVER_HEIGHT - SCENE_ITEMS_SECTION_HEIGHT - HELP_SECTION_HEIGHT);
+  }
+
+  if (isGM) {
+    // Collapse/expand toggle on section header click
+    document.getElementById("sceneItemsHeader")?.addEventListener("click", () => {
+      itemsCollapsed = !itemsCollapsed;
+      applyCollapsedStates();
+      saveUIState();
+    });
+
+    // Subscribe to scene items when the scene is ready; clean up on scene close
+    async function onSceneReady() {
+      await loadSceneItems();
+      unsubSceneItems?.();
+      unsubSceneItems = OBR.scene.items.onChange((items) => {
+        auroraSceneItems = items
+          .filter((item) => isAuroraConfig(item.metadata[CONFIG_KEY]))
+          .map(extractItemData);
+        renderSceneItems();
+      });
+    }
+
+    if (await OBR.scene.isReady()) {
+      await onSceneReady();
+    }
+
+    OBR.scene.onReadyChange(async (ready) => {
+      if (ready) {
+        await onSceneReady();
+      } else {
+        unsubSceneItems?.();
+        unsubSceneItems = null;
+        auroraSceneItems = [];
+        renderSceneItems();
+      }
+    });
+  }
+
+  // Clean up subscriptions when the iframe is torn down
+  window.addEventListener("beforeunload", () => {
+    unsubTheme();
+    unsubRoomMeta();
+    unsubSceneItems?.();
   });
 });

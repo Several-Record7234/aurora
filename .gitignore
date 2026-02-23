@@ -1,0 +1,67 @@
+# dependencies
+/node_modules/
+
+# build outputs
+/dist/
+/.vite/
+/out/
+build/
+
+# TypeScript
+*.tsbuildinfo
+
+# Vite cache
+/.vite
+/.cache/vite
+
+# local env files
+.env
+.env.local
+.env.*.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Temporary/system files
+*.tmp
+*.temp
+*.swp
+*.pid
+*.seed
+*.backup
+
+# Server/node
+npm-debug.log*
+yarn-debug.log*
+psql_export?  # example if you ever dump DBs locally
+
+# optionally ignore lock files if you don't commit them
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Windows
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Other common cruft
+coverage/
+reports/

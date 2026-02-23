@@ -50,6 +50,7 @@ export async function saveToPresetSlot(
   values: AuroraConfig
 ): Promise<void> {
   const presets = await loadPresets();
+  if (index < 0 || index >= presets.length) return;
   presets[index] = {
     n: name.trim().substring(0, MAX_NAME_LENGTH) || `Preset ${index + 1}`,
     s: values.s,
@@ -66,6 +67,7 @@ export async function saveToPresetSlot(
 /** Clear a specific preset slot */
 export async function clearPresetSlot(index: number): Promise<void> {
   const presets = await loadPresets();
+  if (index < 0 || index >= presets.length) return;
   presets[index] = null;
   await savePresets(presets);
 }

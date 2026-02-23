@@ -30,6 +30,7 @@ import type { AuroraConfig } from "./types";
  *   feather:       0–100  → 0.0–1.0   (fraction of half-size for edge fade zone)
  *   invertFeather: bool   → 0.0|1.0   (0 = fade edges, 1 = fade centre)
  *   itemSize:      vec2               (attachment bounds size in local coords)
+ *   shapeSize:     vec2               (actual shape visual size; differs from itemSize for hex/tri)
  *   shapeType:     0–3    → 0.0–3.0   (0=rect/image, 1=circle, 2=triangle, 3=hexagon)
  */
 
@@ -42,12 +43,14 @@ export const SHAPE_TYPE_HEXAGON = 3;
 export interface ShaderGeometry {
   coordOffset: { x: number; y: number };
   itemSize: { x: number; y: number };
+  shapeSize: { x: number; y: number };
   shapeType: number;
 }
 
 const DEFAULT_GEOMETRY: ShaderGeometry = {
   coordOffset: { x: 0, y: 0 },
   itemSize: { x: 1, y: 1 },
+  shapeSize: { x: 1, y: 1 },
   shapeType: SHAPE_TYPE_RECT,
 };
 
@@ -62,6 +65,7 @@ export function getShaderUniforms(config: AuroraConfig, geometry: ShaderGeometry
     { name: "feather", value: (config.f ?? 0) / 100.0 },
     { name: "invertFeather", value: (config.fi ?? false) ? 1.0 : 0.0 },
     { name: "itemSize", value: geometry.itemSize },
+    { name: "shapeSize", value: geometry.shapeSize },
     { name: "shapeType", value: geometry.shapeType * 1.0 },
   ];
 }
@@ -96,13 +100,14 @@ export function getShaderUniforms(config: AuroraConfig, geometry: ShaderGeometry
  *     0 = normal:  full effect at centre, fades to transparent at edges
  *     1 = inverted: transparent at centre, full effect at edges
  *   The fade shape matches the item geometry (rectangular for rects/images,
- *   elliptical for circles, rectangular fallback for others).
+ *   elliptical for circles, triangular SDF for triangles, hexagonal SDF
+ *   for hexagons).
  *
  * SHAPE TYPES:
  *   0 = Rectangle / Image — rectangular distance-to-edge
  *   1 = Circle / Ellipse  — elliptical distance-to-edge
- *   2 = Triangle           — rectangular fallback
- *   3 = Hexagon            — rectangular fallback
+ *   2 = Triangle           — isoceles triangle SDF (incircle-centred)
+ *   3 = Hexagon            — pointy-top hex SDF (proper edge distance)
  *
  * COORDINATE NOTES (see also effectManager.ts):
  *   - Uses `modelView` (not `view`) for ATTACHMENT effects — combines the
@@ -125,6 +130,7 @@ export function getShaderCode(): string {
     uniform float feather;
     uniform float invertFeather;
     uniform vec2 itemSize;
+    uniform vec2 shapeSize;
     uniform float shapeType;
 
     vec3 rgb2hsv(vec3 c) {
@@ -196,15 +202,18 @@ export function getShaderCode(): string {
       // Convert to centre-relative coordinates.
       // correctedCoord originates near the top-left of the attachment for all
       // shape types; subtracting halfSize shifts the origin to the geometric centre.
-      // isCircle is kept only to select elliptical vs rectangular distance below.
-      float isCircle = step(0.5, shapeType) * step(shapeType, 1.5);
       vec2 centreRel = correctedCoord - halfSize;
+
+      // Shape type selectors (branchless via step ranges)
+      float isCircle   = step(0.5, shapeType) * step(shapeType, 1.5);  // type 1
+      float isTriangle = step(1.5, shapeType) * step(shapeType, 2.5);  // type 2
+      float isHexagon  = step(2.5, shapeType) * step(shapeType, 3.5);  // type 3
 
       // Normalised position: 0 at centre, 1 at edge
       float edgeNorm;
 
       // Circle/ellipse: elliptical distance from centre
-      vec2 ellipseNorm2 = centreRel / halfSize; // halfSize;
+      vec2 ellipseNorm2 = centreRel / halfSize;
       float ellipseNorm = length(ellipseNorm2);
 
       // Rectangle and others: rectangular distance (nearest edge)
@@ -212,7 +221,36 @@ export function getShaderCode(): string {
       float minHalf = min(halfSize.x, halfSize.y);
       float rectNorm = 1.0 - min(distFromEdge.x, distFromEdge.y) / minHalf;
 
+      // Triangle (isoceles, apex at top-centre of bounding box)
+      // Normalised by shapeSize (the actual item.width × item.height,
+      // excluding bounds excess and stroke padding) so the SDF matches
+      // the visible triangle geometry.
+      // tp.x is abs'd to exploit left/right symmetry; tp.y keeps sign since
+      // the triangle is asymmetric vertically (apex at top, base at bottom).
+      // Signed distance to each edge (positive = inside the triangle):
+      //   base:   1 - y
+      //   slant:  (-2|x| + y + 1) / √5   (inward normal of the slanted edge)
+      // Normalised by the inradius (√5 - 1)/2 ≈ 0.618 so that 0 = incircle
+      // centre (equidistant from all edges) and 1 = on the edge.
+      vec2 triHalf = shapeSize * 0.5;
+      vec2 tp = vec2(abs(centreRel.x) / triHalf.x, centreRel.y / triHalf.y);
+      float s5 = sqrt(5.0);
+      float triBase  = 1.0 - tp.y;
+      float triSlant = (-2.0 * tp.x + tp.y + 1.0) / s5;
+      float triNorm  = 1.0 - min(triBase, triSlant) * 2.0 / (s5 - 1.0);
+
+      // Hexagon (pointy-top, regular): OBR draws a regular hex inscribed
+      // in a circle of circumradius r, with only the top and bottom vertices
+      // touching the bounding box. shapeSize carries the hex's actual visual
+      // dimensions (2×inradius, 2×circumradius) computed from item.width/height,
+      // excluding the bounds excess/stroke padding that inflates itemSize.
+      vec2 hexHalf = shapeSize * 0.5;
+      vec2 hp = abs(centreRel) / hexHalf;
+      float hexNorm = max(hp.x, 0.5 * hp.x + hp.y);
+
       edgeNorm = mix(rectNorm, ellipseNorm, isCircle);
+      edgeNorm = mix(edgeNorm, triNorm, isTriangle);
+      edgeNorm = mix(edgeNorm, hexNorm, isHexagon);
 
       // Feather zone: from (1 - feather) to 1
       // At edgeNorm <= (1 - feather): fade = 1 (full effect)

@@ -13,10 +13,10 @@
  * which triggers the normal reconcile path and syncs to all clients.
  */
 
-import OBR, { Effect, Theme } from "@owlbear-rodeo/sdk";
-import { getPluginId } from "../shared/pluginId";
+import OBR, { Effect } from "@owlbear-rodeo/sdk";
 import {
   AuroraConfig,
+  BlendModeValue,
   HSLOValues,
   Presets,
   isAuroraConfig,
@@ -28,24 +28,8 @@ import {
 } from "../shared/types";
 import { getShaderUniforms } from "../shared/shader";
 import { loadPresets, saveToPresetSlot, getPresetsKey } from "../shared/presets";
-
-// ── Theme ──────────────────────────────────────────────────────────
-
-function applyTheme(theme: Theme): void {
-  const root = document.documentElement;
-  const isDark = theme.mode === "DARK";
-  root.style.setProperty("--bg-default", theme.background.default);
-  root.style.setProperty("--bg-paper", theme.background.paper);
-  root.style.setProperty("--text-primary", theme.text.primary);
-  root.style.setProperty("--text-secondary", theme.text.secondary);
-  root.style.setProperty("--border-color", isDark ? "rgba(255,255,255,0.12)" : "#e0e0e0");
-  root.style.setProperty("--bg-subtle", isDark ? "rgba(255,255,255,0.06)" : "#f0f0f0");
-  root.style.setProperty("--shadow", isDark ? "0 1px 3px rgba(0,0,0,0.4)" : "0 1px 3px rgba(0,0,0,0.1)");
-}
-
-const CONFIG_KEY = getPluginId("config");
-const EFFECT_META_KEY = getPluginId("isEffect");
-const EFFECT_SOURCE_KEY = getPluginId("sourceItemId");
+import { CONFIG_KEY, LAST_CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY } from "../shared/keys";
+import { applyTheme } from "../shared/theme";
 
 // ── DOM Elements ──────────────────────────────────────────────────
 
@@ -65,6 +49,7 @@ interface UIElements {
   invertBtn: HTMLButtonElement;
   presetSelect: HTMLSelectElement;
   savePresetBtn: HTMLButtonElement;
+  resetBtn: HTMLButtonElement;
   removeBtn: HTMLButtonElement;
 }
 
@@ -84,13 +69,14 @@ function resolveUI(): UIElements | null {
   const invertBtn = document.getElementById("invertBtn") as HTMLButtonElement | null;
   const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement | null;
   const savePresetBtn = document.getElementById("savePresetBtn") as HTMLButtonElement | null;
+  const resetBtn = document.getElementById("resetBtn") as HTMLButtonElement | null;
   const removeBtn = document.getElementById("removeBtn") as HTMLButtonElement | null;
 
   if (
     !toggle || !satSlider || !lightSlider || !hueSlider || !opacitySlider ||
     !satValue || !lightValue || !hueValue || !opacityValue ||
     !featherSlider || !featherValue || !invertBtn ||
-    !presetSelect || !savePresetBtn || !removeBtn
+    !presetSelect || !savePresetBtn || !resetBtn || !removeBtn
   ) {
     return null;
   }
@@ -99,7 +85,7 @@ function resolveUI(): UIElements | null {
     toggle, satSlider, lightSlider, hueSlider, opacitySlider,
     satValue, lightValue, hueValue, opacityValue,
     blendSelect, featherSlider, featherValue, invertBtn,
-    presetSelect, savePresetBtn, removeBtn,
+    presetSelect, savePresetBtn, resetBtn, removeBtn,
   };
 }
 
@@ -175,9 +161,9 @@ async function readConfigFromItems(): Promise<AuroraConfig> {
       // Ensure backwards compatibility: older configs may lack b, f, fi
       const withDefaults: AuroraConfig = {
         ...config,
-        b:  config.b  ?? 0,
-        f:  config.f  ?? 0,
-        fi: config.fi ?? false,
+        b:  config.b  ?? DEFAULT_CONFIG.b,
+        f:  config.f  ?? DEFAULT_CONFIG.f,
+        fi: config.fi ?? DEFAULT_CONFIG.fi,
       };
       return withDefaults;
     }
@@ -196,12 +182,16 @@ async function writeConfigToItems(): Promise<void> {
   });
 }
 
-/** Remove Aurora metadata from all selected items */
+/** Remove Aurora metadata from all selected items.
+ *  Snapshots the current config into lastConfig so that a subsequent
+ *  "Add Aurora" on the same item restores the previous settings. */
 async function removeAuroraFromItems(): Promise<void> {
   if (selectedItemIds.length === 0) return;
 
   await OBR.scene.items.updateItems(selectedItemIds, (items) => {
     for (const item of items) {
+      const config = item.metadata[CONFIG_KEY];
+      if (config) item.metadata[LAST_CONFIG_KEY] = { ...config };
       delete item.metadata[CONFIG_KEY];
     }
   });
@@ -391,7 +381,7 @@ function setupEventListeners() {
   if (ui.blendSelect) {
     ui.blendSelect.addEventListener("change", async () => {
       if (!ui?.blendSelect) return;
-      currentConfig.b = parseInt(ui.blendSelect.value, 10);
+      currentConfig.b = parseInt(ui.blendSelect.value, 10) as BlendModeValue;
       await writeConfigToItems();
     });
   }
@@ -444,6 +434,18 @@ function setupEventListeners() {
     showSaveDialog();
   });
 
+  // Reset to neutral values (no visual effect, but keeps Aurora attached)
+  ui.resetBtn.addEventListener("click", async () => {
+    currentConfig.s = 100;
+    currentConfig.l = 100;
+    currentConfig.h = 0;
+    currentConfig.o = 0;
+    currentConfig.f = 0;
+    currentConfig.fi = false;
+    updateUI();
+    await writeConfigToItems();
+  });
+
   // Remove Aurora
   ui.removeBtn.addEventListener("click", async () => {
     await removeAuroraFromItems();
@@ -456,33 +458,50 @@ function showSaveDialog() {
   const overlay = document.createElement("div");
   overlay.className = "save-overlay";
 
-  // Build slot options
-  const slotOptions = presets
-    .map((preset, i) => {
-      const label = preset ? preset.n : `Preset ${i + 1} (empty)`;
-      return `<option value="${i}">${label}</option>`;
-    })
-    .join("");
-
   const dialog = document.createElement("div");
   dialog.className = "save-dialog";
-  dialog.innerHTML = `
-    <h3>Save Current As...</h3>
-    <label for="saveSlotSelect">Slot</label>
-    <select id="saveSlotSelect">${slotOptions}</select>
-    <label for="saveNameInput">Name</label>
-    <input type="text" id="saveNameInput" maxlength="${MAX_NAME_LENGTH}" placeholder="Preset name">
-    <div class="save-dialog-buttons">
-      <button class="cancel">Cancel</button>
-      <button class="confirm">Save</button>
-    </div>
-  `;
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Save Current As...";
+  dialog.appendChild(heading);
+
+  const slotLabel = document.createElement("label");
+  slotLabel.textContent = "Slot";
+  dialog.appendChild(slotLabel);
+
+  const slotSelect = document.createElement("select");
+  presets.forEach((preset, i) => {
+    const opt = document.createElement("option");
+    opt.value = i.toString();
+    opt.textContent = preset ? preset.n : `Preset ${i + 1} (empty)`;
+    slotSelect.appendChild(opt);
+  });
+  dialog.appendChild(slotSelect);
+
+  const nameLabel = document.createElement("label");
+  nameLabel.textContent = "Name";
+  dialog.appendChild(nameLabel);
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.maxLength = MAX_NAME_LENGTH;
+  nameInput.placeholder = "Preset name";
+  dialog.appendChild(nameInput);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "save-dialog-buttons";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "cancel";
+  cancelBtn.textContent = "Cancel";
+  const confirmBtn = document.createElement("button");
+  confirmBtn.className = "confirm";
+  confirmBtn.textContent = "Save";
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(confirmBtn);
+  dialog.appendChild(btnRow);
 
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);
-
-  const slotSelect = document.getElementById("saveSlotSelect") as HTMLSelectElement;
-  const nameInput = document.getElementById("saveNameInput") as HTMLInputElement;
 
   // Auto-select the first empty slot if one exists
   const firstEmpty = presets.findIndex((p) => p === null);
@@ -514,8 +533,8 @@ function showSaveDialog() {
     close();
   };
 
-  dialog.querySelector(".cancel")?.addEventListener("click", close);
-  dialog.querySelector(".confirm")?.addEventListener("click", doSave);
+  cancelBtn.addEventListener("click", close);
+  confirmBtn.addEventListener("click", doSave);
 
   // Enter key in name input triggers save
   nameInput.addEventListener("keydown", (e) => {
@@ -551,7 +570,7 @@ OBR.onReady(async () => {
   // Apply OBR theme tokens and subscribe to live changes
   const theme = await OBR.theme.getTheme();
   applyTheme(theme);
-  OBR.theme.onChange(applyTheme);
+  const unsubTheme = OBR.theme.onChange(applyTheme);
 
   // Populate the blend mode dropdown from the shared constant
   populateBlendModes();
@@ -568,16 +587,24 @@ OBR.onReady(async () => {
   presets = await loadPresets();
   updatePresetDropdown();
 
+  // Hide destructive actions for non-GMs
+  const isGM = (await OBR.player.getRole()) === "GM";
+  if (!isGM) {
+    ui.savePresetBtn.style.display = "none";
+    ui.resetBtn.style.display = "none";
+    ui.removeBtn.style.display = "none";
+  }
+
   // Attach event listeners
   setupEventListeners();
 
   // Sync if item metadata changes externally (e.g. another player)
-  OBR.scene.items.onChange(async (items) => {
+  const unsubItems = OBR.scene.items.onChange(async (items) => {
     const relevant = items.filter((item) => selectedItemIds.includes(item.id));
     for (const item of relevant) {
       const config = item.metadata[CONFIG_KEY];
       if (isAuroraConfig(config)) {
-        currentConfig = { ...config, b: config.b ?? 0 };
+        currentConfig = { ...config, b: config.b ?? DEFAULT_CONFIG.b, f: config.f ?? DEFAULT_CONFIG.f, fi: config.fi ?? DEFAULT_CONFIG.fi };
         updateUI();
         break;
       }
@@ -585,11 +612,18 @@ OBR.onReady(async () => {
   });
 
   // Sync presets if they change externally
-  OBR.room.onMetadataChange((metadata) => {
+  const unsubRoomMeta = OBR.room.onMetadataChange((metadata) => {
     const data = metadata[getPresetsKey()];
     if (isPresets(data)) {
       presets = data;
       updatePresetDropdown();
     }
+  });
+
+  // Clean up subscriptions when the iframe is torn down
+  window.addEventListener("beforeunload", () => {
+    unsubTheme();
+    unsubItems();
+    unsubRoomMeta();
   });
 });
