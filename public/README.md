@@ -81,7 +81,7 @@ These can be recalled and then overwritten with your own remixes of them, plus t
 
 In the **Aurora Settings** popover, use the **Load Preset…** dropdown to pick any saved preset. The sliders snap to those values instantly - it's a great way to audition different moods or use a preset as a starting point before fine-tuning.
 
-> ![Screenshot placeholder: Selecting a preset from the dropdown]
+> ![Load Preset from the dropdown](https://github.com/user-attachments/assets/bfd89d3a-12a9-4280-b497-acdee3da40ac)
 
 ### 6. Toggle The Effect On And Off
 
@@ -99,7 +99,7 @@ Happy with your settings? Hit **Save Current As…** to store them. You can:
 
 Presets are compacted and stored in the **Room metadata**, so they're shared with every player in the Room and they persist across sessions and Scene changes. A map-layer object that has an Aurora effect attached will save its parameters in its own metadata.
 
-> ![Screenshot placeholder: The Save dialog with slot selection and name input]
+> ![Save Current As... with slot selection and name input](https://github.com/user-attachments/assets/9bfffb5d-6bd9-4e40-bf88-53af1e60f640)
 
 ---
 
@@ -111,7 +111,8 @@ Click the **<img src="icon.png" width="20" height="20"> Aurora** icon in the top
 
 From here you can get an overview of everything you've saved, and manage your library without needing to have a map item selected.
 
-> ![Screenshot placeholder: The Action popover showing the Preset Library grid]
+> <img width="351" height="687" alt="image" src="https://github.com/user-attachments/assets/5ae47afa-164d-4605-8da5-14c4792f772b" />
+
 
 ### 9. Rename Or Clear Presets *GM-only feature*
 
@@ -122,7 +123,7 @@ At the top of the Preset Library you'll find two mode buttons:
 
 Both modes highlight the valid targets so you know exactly what you're clicking. Click the same mode button again (or complete the action) to exit the mode.
 
-> ![Screenshot placeholder: Rename mode active with presets highlighted in blue]
+> ![Rename mode highlights presets in blue](https://github.com/user-attachments/assets/8dd80c9c-b90e-4494-8caf-0857bbfe7634)
 
 ---
 
@@ -136,7 +137,7 @@ If you want to remove the shader entirely then you can use the red **Remove** bu
 
 If you just want to temporarily turn the effect off while keeping your slider values intact, use the **Enabled** toggle instead - that way your settings are still there when you switch it back on and you don't need to worry about whether this item is in the Map layer.
 
-> ![Screenshot placeholder: The Reset and Remove buttons at the bottom of the settings panel]
+> ![The Reset and Remove buttons at the bottom of the settings panel](https://github.com/user-attachments/assets/4a0dd172-0cf6-48ec-a268-74756392e482)
 
 ---
 ## Managing Aurora Effects In-Game
@@ -144,6 +145,8 @@ If you just want to temporarily turn the effect off while keeping your slider va
 ### 11. The Scene Items List *GM-only feature*
 
 In the Action popover, you'll see a section called **Scene Items**, which lists every item that currently has an Aurora effect attached to it, even if that effect is not changing the item's appearance (ie. it's 'zeroed out' and/or currently disabled).
+
+<img width="353" height="682" alt="image" src="https://github.com/user-attachments/assets/efd3d6f6-af67-4ce0-82f8-5fce618931da" />
 
 Within this list you can see a thumbnail of each item, its Accessibility name, and its disabled/enabled state. Clicking on the thumbnail or the name will select that item in the Scene, and double-clicking on either of these will select the item and will also move your viewport to make it centred and full-screen.
 
