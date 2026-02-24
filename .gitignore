@@ -26,7 +26,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # README help media
-media/
+/media/
 
 # OS files
 .DS_Store
