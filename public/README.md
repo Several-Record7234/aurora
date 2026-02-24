@@ -27,13 +27,13 @@ https://aurora-0nm6.onrender.com/manifest.json
 
 Then head to your **Owlbear Rodeo Room** → **Extras** → **Extensions** → **+** (Add Custom Extension), paste the URL, and confirm.
 
-> ![Screenshot placeholder: Adding the manifest URL in the Owlbear Rodeo extension manager]
+> ![Screenshot placeholder: Adding the manifest URL in the Owlbear Rodeo extension manager](https://github.com/Several-Record7234/aurora/raw/refs/heads/main/media/Aurora%201%20-%20installing.mp4)
 
 ### 2. Enable Aurora In Your Room
 
 In the **Extensions Manager** popover, make sure Aurora is **toggled on** for this Room. You should see the <img src="icon.png" width="20" height="20"> Aurora icon appear in the top-left extension Action tray.
 
-> ![Screenshot placeholder: Enabling Aurora in the room's extension list]
+> ![Screenshot placeholder: Enabling Aurora in the room's extension list](https://github.com/Several-Record7234/aurora/raw/refs/heads/main/media/Aurora%202%20-%20enabling.mp4)
 
 ---
 
