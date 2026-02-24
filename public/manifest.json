@@ -1,6 +1,6 @@
 {
   "name": "Aurora",
-  "description": "Time-of-day effects with in-built presets. Select a Map-layer item, ‘Add Aurora’, then adjust hue, saturation, lightness, opacity, and feathering",
+  "description": "Time-of-day Map-layer effects with 4 presets; ‘Add Aurora’, then adjust hue, saturation, lightness, opacity, and feathering",
   "version": "0.9.2",
   "manifest_version": 1,
   "author": "Andrew C",
