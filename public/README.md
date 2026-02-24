@@ -52,7 +52,9 @@ Select and right-click any item on the **Map layer** and choose **Add Aurora** f
 
 After adding Aurora, right-click the same item again and choose **Aurora Settings**. This opens the control panel where you can tweak all four **Saturation**, **Lightness**, **Hue**, and **Opacity** sliders and preview their changes, and those parameters are set for everyone soon as you release them.
 
-> ![Screenshot placeholder: The Aurora Settings popover with sliders]
+> ![The Aurora Settings popover with sliders](https://github.com/user-attachments/assets/53ea2570-5de3-49ca-ae07-093d214dd6cd)
+
+
 
 There are also controls here for gradient effects, with a **Feather** percentage slider that adjusts how much of the shape is covered in a smooth gradient of the effect, and an **Invert** button that flips the direction of the 
 
