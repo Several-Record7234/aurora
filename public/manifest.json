@@ -1,6 +1,6 @@
 {
   "name": "Aurora",
-  "description": "HSL colour grading effects for maps. Right-click a map to add Aurora, then adjust hue, saturation, lightness, and opacity.",
+  "description": "Time-of-day effects for maps, with in-built presets. Select and right-click a Map-layer item to Add Aurora, then adjust saturation, lightness, hue, opacity, and feather effects.",
   "version": "0.9.2",
   "manifest_version": 1,
   "author": "Andrew C",
