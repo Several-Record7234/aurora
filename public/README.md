@@ -52,17 +52,15 @@ Select and right-click any item on the **Map layer** and choose **Add Aurora** f
 
 After adding Aurora, right-click the same item again and choose **Aurora Settings**. This opens the control panel where you can tweak all four **Saturation**, **Lightness**, **Hue**, and **Opacity** sliders and preview their changes, and those parameters are set for everyone soon as you release them.
 
-> ![The Aurora Settings popover with sliders](https://github.com/user-attachments/assets/53ea2570-5de3-49ca-ae07-093d214dd6cd)
-
-
+> ![The Aurora Settings popover with sliders](https://github.com/user-attachments/assets/d6cc379a-695f-487c-a0d2-19b682496ef3)
 
 There are also controls here for gradient effects, with a **Feather** percentage slider that adjusts how much of the shape is covered in a smooth gradient of the effect, and an **Invert** button that flips the direction of the 
+
+> ![Feather gradient and Invert](https://github.com/user-attachments/assets/374c512a-e57a-42c1-a031-6991a91f3ecd)
 
 **💡 Pro tip:** Having a map item with a particular effect applied and then layering one or more smaller shaders (with the same effect) on top of it will allow you to have some cool gradient cut-outs, where the smaller shapes use the Feather parameter (and the Invert state if needed) to allow smooth transitions from 0%-effect areas to 100%-effect areas - these smaller items can then be attached to tokens so that they follow movement around the map.
 
 Shaders also inherit a proxy of their parent item's current layer, ensuring that a shader applied to a Prop-layer item (like a bright lamp) will always render above *and override* a shader applied to a Map-layer item (like a desaturated Darkvision range).
-
-> ![Screenshot placeholder: Example of a gradient fill 'cutout' on a larger map effect]
 
 ---
 
