@@ -44,7 +44,7 @@ In the **Extensions Manager** popover, make sure Aurora is **toggled on** for th
 
 Select and right-click any item on the **Map layer** and choose **Add Aurora** from the context menu. That's it — the shader is now attached and ready to configure!
 
-> ![Screenshot placeholder: Right-clicking a map image and selecting "Add Aurora"]
+> ![Right-clicking a Map-layer object and selecting "Add Aurora"](<img width="1377" height="637" alt="image" src="https://github.com/user-attachments/assets/37071643-45f5-4fef-84db-4abf641d46fd" />)
 
 **💡 Pro tip:** Want to affect multiple maps with a single effect? Draw a large rectangle on the **Drawing** layer, move it to the **Map** layer, then **Add Aurora** to that rectangle. The shader covers the full area of whatever item it's attached to, so one big shape can mood-change your entire Scene in one go.
 
