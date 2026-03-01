@@ -49,7 +49,10 @@ async function migrateRoomMetadata(): Promise<void> {
     const newKey = getPluginId(path);
     if (metadata[oldKey] !== undefined && metadata[newKey] === undefined) {
       updates[newKey] = metadata[oldKey];
-      updates[oldKey] = undefined; // Delete old key
+      // OBR's setMetadata performs a shallow merge: setting a key to
+      // `undefined` removes it from the metadata object. This is the
+      // standard OBR pattern for deleting room metadata keys.
+      updates[oldKey] = undefined;
       found = true;
     }
   }

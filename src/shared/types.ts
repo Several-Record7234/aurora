@@ -112,10 +112,10 @@ export function isAuroraConfig(val: unknown): val is AuroraConfig {
   if (val === null || typeof val !== "object") return false;
   const obj = val as Record<string, unknown>;
   return (
-    typeof obj.s === "number" &&
-    typeof obj.l === "number" &&
-    typeof obj.h === "number" &&
-    typeof obj.o === "number" &&
+    typeof obj.s === "number" && obj.s >= 0 && obj.s <= 200 &&
+    typeof obj.l === "number" && obj.l >= 0 && obj.l <= 200 &&
+    typeof obj.h === "number" && obj.h >= -180 && obj.h <= 180 &&
+    typeof obj.o === "number" && obj.o >= 0 && obj.o <= 100 &&
     typeof obj.e === "boolean"
     // b, f, fi are optional for backwards compatibility — older configs
     // without them use defaults in getShaderUniforms
@@ -132,14 +132,17 @@ export function isAuroraConfig(val: unknown): val is AuroraConfig {
 export function isPresets(val: unknown): val is Presets {
   if (!Array.isArray(val) || val.length === 0 || val.length > MAX_PRESET_SLOTS) return false;
   return val.every(
-    (item) =>
-      item === null ||
-      (typeof item === "object" &&
-        item !== null &&
-        typeof (item as Record<string, unknown>).n === "string" &&
-        typeof (item as Record<string, unknown>).s === "number" &&
-        typeof (item as Record<string, unknown>).l === "number" &&
-        typeof (item as Record<string, unknown>).h === "number" &&
-        typeof (item as Record<string, unknown>).o === "number")
+    (item) => {
+      if (item === null) return true;
+      if (typeof item !== "object" || item === null) return false;
+      const obj = item as Record<string, unknown>;
+      return (
+        typeof obj.n === "string" &&
+        typeof obj.s === "number" && obj.s >= 0 && obj.s <= 200 &&
+        typeof obj.l === "number" && obj.l >= 0 && obj.l <= 200 &&
+        typeof obj.h === "number" && obj.h >= -180 && obj.h <= 180 &&
+        typeof obj.o === "number" && obj.o >= 0 && obj.o <= 100
+      );
+    }
   );
 }

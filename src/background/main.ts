@@ -21,13 +21,17 @@ OBR.onReady(async () => {
   await migrateMetadata();
 
   createAuroraMenu();
-  // startEffectManager() returns a cleanup function; the background page
-  // lives for the entire session so we don't need to capture it.
-  startEffectManager();
+  const cleanupEffectManager = startEffectManager();
 
   // Also migrate item metadata when the user switches to a different scene.
   // REMOVABLE: see migrateMetadata.ts header comment.
-  OBR.scene.onReadyChange(async (ready) => {
+  const unsubReadyChange = OBR.scene.onReadyChange(async (ready) => {
     if (ready) await migrateItemMetadata();
+  });
+
+  // Clean up subscriptions and effects when the background iframe is torn down
+  window.addEventListener("beforeunload", () => {
+    cleanupEffectManager();
+    unsubReadyChange();
   });
 });

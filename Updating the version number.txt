@@ -1,0 +1,5 @@
+In the terminal, when you're ready to commit and push to remote, type:
+
+npm version patch|minor|major (one of these)
+
+and you'll update the version number in package.json, which is imported into manifest.json and then creates a git commit, and tags it — a nice one-stop workflow for release cuts.

@@ -46,7 +46,7 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
   const shapeW = isShape(item) ? item.width : 0;
   const shapeH = isShape(item) ? item.height : 0;
   const shapeType = isShape(item) ? item.shapeType : "";
-  return [
+  return JSON.stringify([
     config.s, config.l, config.h, config.o, config.e, config.b ?? 0,
     config.f ?? 0, config.fi ?? false,
     item.position.x, item.position.y,
@@ -55,7 +55,7 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
     item.visible,
     item.layer,
     item.type, shapeType, strokeWidth, shapeW, shapeH,
-  ].join("|");
+  ]);
 }
 
 // ── Effect Helpers ────────────────────────────────────────────────
@@ -401,12 +401,12 @@ async function reconcileEffects(items: Item[]): Promise<void> {
 
     // ── Determine which effects to remove ───────────────────────
 
-    const idsToRemove: string[] = [];
+    const idsToRemove = new Set<string>();
 
     for (const [sourceId, effectItem] of effectsBySource) {
       if (!auroraItems.has(sourceId)) {
         // Source item no longer has Aurora config — remove its effect
-        idsToRemove.push(effectItem.id);
+        idsToRemove.add(effectItem.id);
         snapshotCache.delete(sourceId);
       }
     }
@@ -428,8 +428,8 @@ async function reconcileEffects(items: Item[]): Promise<void> {
       // Config changed or effect is missing — schedule removal of the
       // old effect (if any) and creation of a new one
       const existing = effectsBySource.get(itemId);
-      if (existing && !idsToRemove.includes(existing.id)) {
-        idsToRemove.push(existing.id);
+      if (existing && !idsToRemove.has(existing.id)) {
+        idsToRemove.add(existing.id);
       }
 
       if (config.e) {
@@ -448,8 +448,8 @@ async function reconcileEffects(items: Item[]): Promise<void> {
 
     // ── Execute batched SDK operations ──────────────────────────
 
-    if (idsToRemove.length > 0) {
-      await OBR.scene.local.deleteItems(idsToRemove);
+    if (idsToRemove.size > 0) {
+      await OBR.scene.local.deleteItems([...idsToRemove]);
     }
 
     if (effectsToAdd.length > 0) {
@@ -457,6 +457,7 @@ async function reconcileEffects(items: Item[]): Promise<void> {
     }
   } catch (err) {
     console.error("Aurora: reconcileEffects failed, will retry on next change", err);
+    OBR.notification.show("Aurora: effect update failed — will retry on next change", "WARNING");
   } finally {
     reconciling = false;
     if (pendingItems) {

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.owlbear.rodeo)",
+      "Bash(wc -l /c/Coding/aurora/src/**/*.ts /c/Coding/aurora/src/**/*.css)"
+    ]
+  }
+}

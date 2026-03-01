@@ -184,14 +184,18 @@ async function writeConfigToItems(): Promise<void> {
 
 /** Remove Aurora metadata from all selected items.
  *  Snapshots the current config into lastConfig so that a subsequent
- *  "Add Aurora" on the same item restores the previous settings. */
+ *  "Add Aurora" on the same item restores the previous settings.
+ *
+ *  NOTE: When a user duplicates an item, OBR copies all metadata including
+ *  lastConfig. This is intentional — duplicating a formerly-Aurora item lets
+ *  the user re-add Aurora with the same settings on the copy. */
 async function removeAuroraFromItems(): Promise<void> {
   if (selectedItemIds.length === 0) return;
 
   await OBR.scene.items.updateItems(selectedItemIds, (items) => {
     for (const item of items) {
       const config = item.metadata[CONFIG_KEY];
-      if (config) item.metadata[LAST_CONFIG_KEY] = { ...config };
+      if (isAuroraConfig(config)) item.metadata[LAST_CONFIG_KEY] = { ...config };
       delete item.metadata[CONFIG_KEY];
     }
   });
@@ -527,9 +531,13 @@ function showSaveDialog() {
   const doSave = async () => {
     const index = parseInt(slotSelect.value, 10);
     const name = nameInput.value.trim() || `Preset ${index + 1}`;
-    await saveToPresetSlot(index, name, currentConfig);
-    presets = await loadPresets();
-    updatePresetDropdown();
+    try {
+      await saveToPresetSlot(index, name, currentConfig);
+      presets = await loadPresets();
+      updatePresetDropdown();
+    } catch {
+      OBR.notification.show("Aurora: failed to save preset", "ERROR");
+    }
     close();
   };
 

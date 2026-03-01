@@ -19,7 +19,7 @@ import {
   BLEND_MODES,
 } from "./shared/types";
 import { loadPresets, savePresets, clearPresetSlot, getPresetsKey } from "./shared/presets";
-import { CONFIG_KEY, UI_STATE_KEY } from "./shared/keys";
+import { CONFIG_KEY } from "./shared/keys";
 import { applyTheme } from "./shared/theme";
 
 /** Dimensions of the action popover (pixels) */
@@ -69,8 +69,13 @@ let presetsCollapsed = false;
 let auroraSceneItems: SceneItemData[] = [];
 let itemsCollapsed = true;
 let unsubSceneItems: (() => void) | null = null;
+let unsubSceneReady: (() => void) | null = null;
 
-/** Shape of the persisted UI collapse state stored in room metadata. */
+/**
+ * Shape of the persisted UI collapse state.
+ * Stored in localStorage keyed by room ID so each player retains their own
+ * preferences independently (room metadata would share state across all players).
+ */
 interface UIState {
   helpCollapsed: boolean;
   presetsCollapsed: boolean;
@@ -87,10 +92,31 @@ function isUIState(v: unknown): v is UIState {
   );
 }
 
-/** Persist the current collapsed states to room metadata. */
-async function saveUIState(): Promise<void> {
+/** localStorage key for this room's UI state, scoped by room ID */
+function getUIStateStorageKey(): string {
+  return `aurora-uiState-${OBR.room.id}`;
+}
+
+/** Persist the current collapsed states to localStorage (per-player, per-room). */
+function saveUIState(): void {
   const state: UIState = { helpCollapsed, presetsCollapsed, itemsCollapsed };
-  await OBR.room.setMetadata({ [UI_STATE_KEY]: state });
+  try {
+    localStorage.setItem(getUIStateStorageKey(), JSON.stringify(state));
+  } catch {
+    // localStorage may be unavailable in some iframe contexts — silently degrade
+  }
+}
+
+/** Load persisted collapsed states from localStorage. */
+function loadUIState(): UIState | null {
+  try {
+    const raw = localStorage.getItem(getUIStateStorageKey());
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isUIState(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -230,8 +256,12 @@ async function handlePresetClick(index: number) {
   if (activeMode === "rename") {
     showRenameDialog(index);
   } else if (activeMode === "clear") {
-    await clearPresetSlot(index);
-    presets = await loadPresets();
+    try {
+      await clearPresetSlot(index);
+      presets = await loadPresets();
+    } catch {
+      OBR.notification.show("Aurora: failed to clear preset", "ERROR");
+    }
     exitMode();
   }
 }
@@ -286,7 +316,11 @@ function showRenameDialog(index: number) {
   const doRename = async () => {
     const name = input.value.trim().substring(0, MAX_NAME_LENGTH) || preset.n;
     presets[index] = { ...preset, n: name };
-    await savePresets(presets);
+    try {
+      await savePresets(presets);
+    } catch {
+      OBR.notification.show("Aurora: failed to rename preset", "ERROR");
+    }
     close();
   };
 
@@ -500,11 +534,10 @@ OBR.onReady(async () => {
   applyTheme(theme);
   const unsubTheme = OBR.theme.onChange(applyTheme);
 
-  // Load persisted UI collapse states from room metadata
+  // Load persisted UI collapse states from localStorage (per-player, per-room)
   {
-    const roomMeta = await OBR.room.getMetadata();
-    const saved = roomMeta[UI_STATE_KEY];
-    if (isUIState(saved)) {
+    const saved = loadUIState();
+    if (saved) {
       helpCollapsed = saved.helpCollapsed;
       presetsCollapsed = saved.presetsCollapsed;
       itemsCollapsed = saved.itemsCollapsed;
@@ -603,7 +636,7 @@ OBR.onReady(async () => {
       await onSceneReady();
     }
 
-    OBR.scene.onReadyChange(async (ready) => {
+    unsubSceneReady = OBR.scene.onReadyChange(async (ready) => {
       if (ready) {
         await onSceneReady();
       } else {
@@ -620,5 +653,6 @@ OBR.onReady(async () => {
     unsubTheme();
     unsubRoomMeta();
     unsubSceneItems?.();
+    unsubSceneReady?.();
   });
 });

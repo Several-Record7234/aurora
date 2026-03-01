@@ -20,5 +20,5 @@ export const EFFECT_META_KEY = getPluginId("isEffect");
 /** Links a local effect back to its source scene item */
 export const EFFECT_SOURCE_KEY = getPluginId("sourceItemId");
 
-/** Persisted UI collapse states (stored in room metadata) */
-export const UI_STATE_KEY = getPluginId("uiState");
+// UI collapse states have moved to localStorage (per-player, per-room)
+// and no longer use room metadata. See src/main.ts for the implementation.

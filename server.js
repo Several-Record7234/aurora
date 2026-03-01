@@ -19,9 +19,20 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let filePath = '.' + req.url;
-  if (filePath === './' || filePath === '.') {
-    filePath = './index.html';
+  // Strip query string, then resolve to an absolute path within the project root
+  const urlPath = req.url.split('?')[0];
+  const projectRoot = path.resolve(__dirname);
+  let filePath = path.resolve(projectRoot, '.' + urlPath);
+
+  // Prevent path traversal: ensure resolved path stays within the project root
+  if (!filePath.startsWith(projectRoot)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('403 Forbidden');
+    return;
+  }
+
+  if (filePath === projectRoot || filePath === projectRoot + path.sep) {
+    filePath = path.join(projectRoot, 'index.html');
   }
 
   const extname = String(path.extname(filePath)).toLowerCase();
@@ -43,11 +54,11 @@ const server = http.createServer((req, res) => {
     if (error) {
       console.error(`Error reading file ${filePath}:`, error);
       if(error.code == 'ENOENT') {
-        res.writeHead(404, { 'Content-Type': 'text/html' });
-        res.end('<h1>404 - File Not Found</h1><p>Path: ' + filePath + '</p>', 'utf-8');
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('404 - File Not Found');
       } else {
-        res.writeHead(500);
-        res.end('Server Error: ' + error.code);
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('500 - Server Error');
       }
     } else {
       res.writeHead(200, { 'Content-Type': contentType });
