@@ -363,6 +363,7 @@ function setupEventListeners() {
   for (const { slider, label, key, suffix } of sliderConfig) {
     slider.addEventListener("input", () => {
       const value = parseInt(slider.value, 10);
+      if (isNaN(value)) return;
       currentConfig[key] = value;
       label.textContent = `${value}${suffix}`;
 
@@ -386,7 +387,9 @@ function setupEventListeners() {
   if (ui.blendSelect) {
     ui.blendSelect.addEventListener("change", async () => {
       if (!ui?.blendSelect) return;
-      currentConfig.b = parseInt(ui.blendSelect.value, 10) as BlendModeValue;
+      const val = parseInt(ui.blendSelect.value, 10);
+      if (isNaN(val)) return;
+      currentConfig.b = val as BlendModeValue;
       await writeConfigToItems();
     });
   }
@@ -395,6 +398,7 @@ function setupEventListeners() {
   ui.featherSlider.addEventListener("input", () => {
     if (!ui) return;
     const value = parseInt(ui.featherSlider.value, 10);
+    if (isNaN(value)) return;
     currentConfig.f = value;
     ui.featherValue.textContent = `${value}%`;
     previewLocal();
