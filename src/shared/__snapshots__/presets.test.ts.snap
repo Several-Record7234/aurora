@@ -1,0 +1,291 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DEFAULT_PRESETS → shader uniforms > Blood Moon produces stable uniforms 1`] = `
+[
+  {
+    "name": "saturation",
+    "value": 0.35,
+  },
+  {
+    "name": "lightness",
+    "value": 0.4,
+  },
+  {
+    "name": "hue",
+    "value": 0,
+  },
+  {
+    "name": "opacity",
+    "value": 0.5,
+  },
+  {
+    "name": "blendMode",
+    "value": 0,
+  },
+  {
+    "name": "coordOffset",
+    "value": {
+      "x": 0,
+      "y": 0,
+    },
+  },
+  {
+    "name": "feather",
+    "value": 0,
+  },
+  {
+    "name": "invertFeather",
+    "value": 0,
+  },
+  {
+    "name": "itemSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeType",
+    "value": 0,
+  },
+]
+`;
+
+exports[`DEFAULT_PRESETS → shader uniforms > DEFAULT_CONFIG (identity) produces stable uniforms 1`] = `
+[
+  {
+    "name": "saturation",
+    "value": 1,
+  },
+  {
+    "name": "lightness",
+    "value": 1,
+  },
+  {
+    "name": "hue",
+    "value": 0,
+  },
+  {
+    "name": "opacity",
+    "value": 0,
+  },
+  {
+    "name": "blendMode",
+    "value": 3,
+  },
+  {
+    "name": "coordOffset",
+    "value": {
+      "x": 0,
+      "y": 0,
+    },
+  },
+  {
+    "name": "feather",
+    "value": 0,
+  },
+  {
+    "name": "invertFeather",
+    "value": 0,
+  },
+  {
+    "name": "itemSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeType",
+    "value": 0,
+  },
+]
+`;
+
+exports[`DEFAULT_PRESETS → shader uniforms > Golden Hour produces stable uniforms 1`] = `
+[
+  {
+    "name": "saturation",
+    "value": 1.2,
+  },
+  {
+    "name": "lightness",
+    "value": 0.8,
+  },
+  {
+    "name": "hue",
+    "value": 0.08333333333333333,
+  },
+  {
+    "name": "opacity",
+    "value": 0.2,
+  },
+  {
+    "name": "blendMode",
+    "value": 2,
+  },
+  {
+    "name": "coordOffset",
+    "value": {
+      "x": 0,
+      "y": 0,
+    },
+  },
+  {
+    "name": "feather",
+    "value": 0,
+  },
+  {
+    "name": "invertFeather",
+    "value": 0,
+  },
+  {
+    "name": "itemSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeType",
+    "value": 0,
+  },
+]
+`;
+
+exports[`DEFAULT_PRESETS → shader uniforms > Midnight produces stable uniforms 1`] = `
+[
+  {
+    "name": "saturation",
+    "value": 0.25,
+  },
+  {
+    "name": "lightness",
+    "value": 0.3,
+  },
+  {
+    "name": "hue",
+    "value": -0.3194444444444444,
+  },
+  {
+    "name": "opacity",
+    "value": 0.4,
+  },
+  {
+    "name": "blendMode",
+    "value": 3,
+  },
+  {
+    "name": "coordOffset",
+    "value": {
+      "x": 0,
+      "y": 0,
+    },
+  },
+  {
+    "name": "feather",
+    "value": 0,
+  },
+  {
+    "name": "invertFeather",
+    "value": 0,
+  },
+  {
+    "name": "itemSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeType",
+    "value": 0,
+  },
+]
+`;
+
+exports[`DEFAULT_PRESETS → shader uniforms > Pre-Dawn produces stable uniforms 1`] = `
+[
+  {
+    "name": "saturation",
+    "value": 0.8,
+  },
+  {
+    "name": "lightness",
+    "value": 0.5,
+  },
+  {
+    "name": "hue",
+    "value": -0.4166666666666667,
+  },
+  {
+    "name": "opacity",
+    "value": 0.4,
+  },
+  {
+    "name": "blendMode",
+    "value": 3,
+  },
+  {
+    "name": "coordOffset",
+    "value": {
+      "x": 0,
+      "y": 0,
+    },
+  },
+  {
+    "name": "feather",
+    "value": 0,
+  },
+  {
+    "name": "invertFeather",
+    "value": 0,
+  },
+  {
+    "name": "itemSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeSize",
+    "value": {
+      "x": 1,
+      "y": 1,
+    },
+  },
+  {
+    "name": "shapeType",
+    "value": 0,
+  },
+]
+`;

@@ -11,6 +11,7 @@
  * time so that the OBR manifest always matches the version in package.json.
  * package.json is the single source of truth for the version number.
  */
+/// <reference types="vitest" />
 import { defineConfig, type Plugin } from "vite";
 import { resolve } from "path";
 import { readFileSync } from "fs";
@@ -50,6 +51,10 @@ export default defineConfig({
   },
 
   plugins: [injectManifestVersion()],
+
+  test: {
+    include: ["src/**/*.test.ts"],
+  },
 
   build: {
     rollupOptions: {
