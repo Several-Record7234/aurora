@@ -15,7 +15,13 @@ import { createAuroraMenu } from "./createAuroraMenu";
 import { startEffectManager } from "./effectManager";
 import { migrateMetadata, migrateItemMetadata } from "./migrateMetadata";
 
+const OBR_TIMEOUT_MS = 10_000;
+const obrTimeout = setTimeout(() => {
+  console.warn("Aurora: OBR.onReady did not fire within 10 s — connection may have failed");
+}, OBR_TIMEOUT_MS);
+
 OBR.onReady(async () => {
+  clearTimeout(obrTimeout);
   // Migrate old "com.aurora-vtt.aurora/*" keys before anything reads them.
   // REMOVABLE: see migrateMetadata.ts header comment.
   await migrateMetadata();

@@ -586,7 +586,11 @@ function showSaveDialog() {
 
 // ── Initialization ────────────────────────────────────────────────
 
+const obrTimeout = setTimeout(showConnectionError, OBR_TIMEOUT_MS);
+
 OBR.onReady(async () => {
+  clearTimeout(obrTimeout);
+
   ui = resolveUI();
   if (!ui) {
     console.error("Aurora menu: Required DOM elements not found");

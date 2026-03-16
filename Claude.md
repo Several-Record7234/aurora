@@ -13,6 +13,18 @@ Time-of-day lighting via GPU shader (SkSL colour grading) on the POST_PROCESS la
 
 Available at `../owlbear-rodeo-extensions-SKILL.md`
 
+## Security & Resilience Rules
+
+- Always validate metadata values on READ, not just on WRITE — external sources can inject unexpected data
+- All `parseInt()` / `parseFloat()` results must be checked with `isNaN()` before use
+- String values from external sources (metadata, URL params) must be length-bounded on read
+- Every `OBR.onReady()` entry point must have a timeout fallback with a user-visible error message
+- Never store secrets, API keys, or tokens in frontend source — use environment variables and server-side proxies
+- All user-facing errors must show a notification — never fail silently for operations the user initiated
+- Set Content-Security-Policy headers on all deployed sites, even those running in iframes
+- Preset/config validators must reject or sanitize, never pass through unvalidated data to shaders or DOM
+- Test the "first load after idle" path — cold starts and SDK initialization failures are real user scenarios
+
 ## Project-Specific Constraints
 
 - No React or Tailwind — minimal vanilla TS for performance (shader-heavy workload)
