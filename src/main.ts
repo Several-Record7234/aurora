@@ -32,6 +32,19 @@ const HELP_SECTION_HEIGHT = 100;
 /** Approximate height of the Scene Items section (pixels) */
 const SCENE_ITEMS_SECTION_HEIGHT = 100;
 
+// ── OBR Connection Timeout ────────────────────────────────────────
+
+const OBR_TIMEOUT_MS = 10_000;
+const CONNECTION_ERROR_MSG =
+  "Unable to connect to Owlbear Rodeo. Please try closing and reopening Aurora.";
+
+function showConnectionError(): void {
+  const container = document.querySelector(".container");
+  if (container) {
+    container.innerHTML = `<p style="padding:24px;text-align:center;color:var(--text-secondary);font-size:14px;">${CONNECTION_ERROR_MSG}</p>`;
+  }
+}
+
 // ── State ─────────────────────────────────────────────────────────
 
 let presets: Presets = [...EMPTY_PRESETS];
@@ -524,7 +537,11 @@ function showSceneItemsSection(show: boolean): void {
 
 // ── Initialization ────────────────────────────────────────────────
 
+const obrTimeout = setTimeout(showConnectionError, OBR_TIMEOUT_MS);
+
 OBR.onReady(async () => {
+  clearTimeout(obrTimeout);
+
   await Promise.all([
     OBR.action.setHeight(POPOVER_HEIGHT),
     OBR.action.setWidth(POPOVER_WIDTH),

@@ -90,6 +90,19 @@ function resolveUI(): UIElements | null {
   };
 }
 
+// ── OBR Connection Timeout ────────────────────────────────────────
+
+const OBR_TIMEOUT_MS = 10_000;
+const CONNECTION_ERROR_MSG =
+  "Unable to connect to Owlbear Rodeo. Please try closing and reopening Aurora.";
+
+function showConnectionError(): void {
+  const container = document.querySelector(".container");
+  if (container) {
+    container.innerHTML = `<p style="padding:24px;text-align:center;color:var(--text-secondary);font-size:14px;">${CONNECTION_ERROR_MSG}</p>`;
+  }
+}
+
 // ── State ─────────────────────────────────────────────────────────
 
 let ui: UIElements | null = null;
