@@ -1,2 +1,3 @@
 /*
   Access-Control-Allow-Origin: https://www.owlbear.rodeo
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.owlbear.rodeo; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://www.owlbear.rodeo
