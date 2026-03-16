@@ -25,6 +25,7 @@ import {
   MAX_NAME_LENGTH,
   EMPTY_PRESETS,
   BLEND_MODES,
+  truncatePresetName,
 } from "../shared/types";
 import { getShaderUniforms } from "../shared/shader";
 import { loadPresets, saveToPresetSlot, getPresetsKey } from "../shared/presets";
@@ -302,7 +303,7 @@ function updatePresetSelection() {
 
   if (matchIndex >= 0) {
     const preset = presets[matchIndex]!;
-    placeholder.textContent = preset.n;
+    placeholder.textContent = truncatePresetName(preset.n);
     ui.presetSelect.value = "";
   } else {
     placeholder.textContent = "Load Preset...";
@@ -325,7 +326,7 @@ function updatePresetDropdown() {
       const featherStr = (preset.f ?? 0) > 0
         ? ` F:${preset.f}%${preset.fi ? "\u21BA" : ""}`
         : "";
-      option.textContent = `${preset.n} (S:${preset.s} L:${preset.l} H:${preset.h} O:${preset.o}${featherStr} \u2022 ${blendLabel})`;
+      option.textContent = `${truncatePresetName(preset.n)} (S:${preset.s} L:${preset.l} H:${preset.h} O:${preset.o}${featherStr} \u2022 ${blendLabel})`;
       ui!.presetSelect.appendChild(option);
     }
   });
@@ -477,7 +478,7 @@ function showSaveDialog() {
   presets.forEach((preset, i) => {
     const opt = document.createElement("option");
     opt.value = i.toString();
-    opt.textContent = preset ? preset.n : `Preset ${i + 1} (empty)`;
+    opt.textContent = preset ? truncatePresetName(preset.n) : `Preset ${i + 1} (empty)`;
     slotSelect.appendChild(opt);
   });
   dialog.appendChild(slotSelect);
@@ -516,7 +517,7 @@ function showSaveDialog() {
   // Pre-fill name from selected slot
   const updateName = () => {
     const idx = parseInt(slotSelect.value, 10);
-    nameInput.value = presets[idx]?.n ?? `Preset ${idx + 1}`;
+    nameInput.value = presets[idx] ? truncatePresetName(presets[idx].n) : `Preset ${idx + 1}`;
   };
   updateName();
   slotSelect.addEventListener("change", updateName);

@@ -17,6 +17,7 @@ import {
   EMPTY_PRESETS,
   MAX_NAME_LENGTH,
   BLEND_MODES,
+  truncatePresetName,
 } from "./shared/types";
 import { loadPresets, savePresets, clearPresetSlot, getPresetsKey } from "./shared/presets";
 import { CONFIG_KEY } from "./shared/keys";
@@ -222,7 +223,7 @@ function renderPresets() {
     // Name
     const nameDiv = document.createElement("div");
     nameDiv.className = "preset-name";
-    nameDiv.textContent = preset?.n ?? `Preset ${index + 1}`;
+    nameDiv.textContent = preset ? truncatePresetName(preset.n) : `Preset ${index + 1}`;
 
     // Values — displayed in S, L, H, O order with blend mode
     const valuesDiv = document.createElement("div");

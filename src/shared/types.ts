@@ -90,6 +90,11 @@ export type Presets = Array<Preset | null>;
 export const EMPTY_PRESETS: readonly (Preset | null)[] = Object.freeze(Array(MAX_PRESET_SLOTS).fill(null));
 export const MAX_NAME_LENGTH = 16;
 
+/** Truncate a preset name to MAX_NAME_LENGTH characters */
+export function truncatePresetName(name: string): string {
+  return name.length > MAX_NAME_LENGTH ? name.substring(0, MAX_NAME_LENGTH) : name;
+}
+
 /**
  * Starter presets, written to room metadata the first time presets are
  * loaded in a room that has never used Aurora before. The last two slots
@@ -136,13 +141,17 @@ export function isPresets(val: unknown): val is Presets {
       if (item === null) return true;
       if (typeof item !== "object" || item === null) return false;
       const obj = item as Record<string, unknown>;
-      return (
+      const valid =
         typeof obj.n === "string" &&
         typeof obj.s === "number" && obj.s >= 0 && obj.s <= 200 &&
         typeof obj.l === "number" && obj.l >= 0 && obj.l <= 200 &&
         typeof obj.h === "number" && obj.h >= -180 && obj.h <= 180 &&
-        typeof obj.o === "number" && obj.o >= 0 && obj.o <= 100
-      );
+        typeof obj.o === "number" && obj.o >= 0 && obj.o <= 100;
+      // Truncate overlong names rather than rejecting the entire array
+      if (valid && typeof obj.n === "string" && obj.n.length > MAX_NAME_LENGTH) {
+        obj.n = truncatePresetName(obj.n);
+      }
+      return valid;
     }
   );
 }
