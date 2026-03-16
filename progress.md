@@ -1,6 +1,6 @@
 # Aurora — Progress
 
-## Current State (v0.9.2, last commit 2026-03-02)
+## Current State (v0.9.2, last updated 2026-03-16)
 
 - GPU shader colour grading on POST_PROCESS layer working
 - Controls: saturation, lightness, hue, opacity
@@ -9,6 +9,7 @@
 - Scene items list, GM-only controls
 - Soft undo on remove
 - Help section with Discord link
+- Vitest test suite: 66 tests, 6 snapshots, pre-commit hook
 - Codebase review (2026-03-01): 17 of 28 recommendations completed
 
 ## Recent History
