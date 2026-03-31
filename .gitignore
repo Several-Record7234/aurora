@@ -68,3 +68,8 @@ Desktop.ini
 # Other common cruft
 coverage/
 reports/
+
+# Claude-related files
+.claude/
+CLAUDE.md
+progress.md

@@ -325,8 +325,8 @@ async function updateBloomThreshold(itemId: string): Promise<void> {
   );
 
   // DEBUG: show aurora bounds and all candidates before overlap filtering
-  console.log(`[Aurora] bloomThreshold: aurora bounds centre=(${centerX.toFixed(0)},${centerY.toFixed(0)}) half=(${halfW.toFixed(0)}×${halfH.toFixed(0)})`);
-  console.log(`[Aurora] bloomThreshold: ${candidates.length} candidate image(s) on sample layers`);
+  // console.log(`[Aurora] bloomThreshold: aurora bounds centre=(${centerX.toFixed(0)},${centerY.toFixed(0)}) half=(${halfW.toFixed(0)}×${halfH.toFixed(0)})`);
+  // console.log(`[Aurora] bloomThreshold: ${candidates.length} candidate image(s) on sample layers`);
 
   const boundsResults = await Promise.allSettled(
     candidates.map((item) => OBR.scene.items.getItemBounds([item.id])),
@@ -338,7 +338,7 @@ async function updateBloomThreshold(itemId: string): Promise<void> {
   for (let i = 0; i < candidates.length; i++) {
     const result = boundsResults[i];
     if (result.status !== "fulfilled") {
-      console.log(`[Aurora] bloomThreshold:   SKIPPED (bounds fetch failed): id=${candidates[i].id.slice(-6)}`);
+      // console.log(`[Aurora] bloomThreshold:   SKIPPED (bounds fetch failed): id=${candidates[i].id.slice(-6)}`);
       continue;
     }
     const b = result.value;
@@ -352,12 +352,12 @@ async function updateBloomThreshold(itemId: string): Promise<void> {
     );
     const area = (b.max.x - b.min.x) * (b.max.y - b.min.y);
     // DEBUG: per-candidate overlap result
-    console.log(`[Aurora] bloomThreshold:   id=${candidates[i].id.slice(-6)} layer=${candidates[i].layer} bounds=(${b.min.x.toFixed(0)},${b.min.y.toFixed(0)})→(${b.max.x.toFixed(0)},${b.max.y.toFixed(0)}) area=${area.toFixed(0)} overlaps=${overlaps}`);
+    // console.log(`[Aurora] bloomThreshold:   id=${candidates[i].id.slice(-6)} layer=${candidates[i].layer} bounds=(${b.min.x.toFixed(0)},${b.min.y.toFixed(0)})→(${b.max.x.toFixed(0)},${b.max.y.toFixed(0)}) area=${area.toFixed(0)} overlaps=${overlaps}`);
     if (overlaps) overlapping.push({ item: candidates[i], area });
   }
 
   // DEBUG: log how many images will contribute to the histogram
-  console.log(`[Aurora] bloomThreshold: sampling ${overlapping.length} image(s) overlapping Aurora shape`);
+  // console.log(`[Aurora] bloomThreshold: sampling ${overlapping.length} image(s) overlapping Aurora shape`);
 
   if (overlapping.length === 0) return;
 
@@ -372,9 +372,9 @@ async function updateBloomThreshold(itemId: string): Promise<void> {
   for (const { item, area } of overlapping) {
     const pixels = await fetchImagePixels(item.image.url);
     // DEBUG: log per-image result (URL tail is enough to identify the asset)
-    const urlTail = item.image.url.split("/").pop() ?? item.image.url;
+    // const urlTail = item.image.url.split("/").pop() ?? item.image.url;
     if (!pixels) {
-      console.log(`[Aurora] bloomThreshold:   skipped (fetch failed): ${urlTail}`);
+      // console.log(`[Aurora] bloomThreshold:   skipped (fetch failed): ${urlTail}`);
       continue;
     }
     // Weight proportional to world-space area share. If somehow totalArea is
@@ -390,8 +390,8 @@ async function updateBloomThreshold(itemId: string): Promise<void> {
       total += weight;
     }
     // DEBUG: per-image stats
-    const avgLuma255 = itemPixels > 0 ? (itemLuma / itemPixels).toFixed(1) : "n/a";
-    console.log(`[Aurora] bloomThreshold:   layer=${item.layer} weight=${weight.toFixed(3)} avgLuma=${avgLuma255}/255  ${urlTail}`);
+    // const avgLuma255 = itemPixels > 0 ? (itemLuma / itemPixels).toFixed(1) : "n/a";
+    // console.log(`[Aurora] bloomThreshold:   layer=${item.layer} weight=${weight.toFixed(3)} avgLuma=${avgLuma255}/255  ${urlTail}`);
   }
 
   if (total === 0) return;
@@ -411,7 +411,7 @@ async function updateBloomThreshold(itemId: string): Promise<void> {
   }
 
   // DEBUG: log final result
-  console.log(`[Aurora] bloomThreshold: total pixels=${total}, cutoff=${cutoff}, threshold=${threshold.toFixed(3)} (${(threshold * 255).toFixed(0)}/255)`);
+  // console.log(`[Aurora] bloomThreshold: total pixels=${total}, cutoff=${cutoff}, threshold=${threshold.toFixed(3)} (${(threshold * 255).toFixed(0)}/255)`);
 
   // Persist to item metadata — the effect manager will rebuild the shader
   // effect with the new uniform value when it sees the metadata change.
