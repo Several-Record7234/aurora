@@ -20,9 +20,9 @@ import { DEFAULT_CONFIG, type AuroraConfig } from "./types";
 // ── getShaderUniforms ───────────────────────────────────────────────
 
 describe("getShaderUniforms", () => {
-  it("returns 11 uniforms", () => {
+  it("returns 13 uniforms", () => {
     const uniforms = getShaderUniforms(DEFAULT_CONFIG);
-    expect(uniforms).toHaveLength(11);
+    expect(uniforms).toHaveLength(13);
   });
 
   it("returns all expected uniform names", () => {
@@ -39,6 +39,8 @@ describe("getShaderUniforms", () => {
       "itemSize",
       "shapeSize",
       "shapeType",
+      "dreamy",
+      "bloomThreshold",
     ]);
   });
 
@@ -105,6 +107,24 @@ describe("getShaderUniforms", () => {
       expect(off.find((u) => u.name === "invertFeather")!.value).toBe(0.0);
       expect(on.find((u) => u.name === "invertFeather")!.value).toBe(1.0);
     });
+
+    it("normalises dreamy: -100–100 → -1.0–1.0", () => {
+      const atNeg100 = getShaderUniforms({ ...DEFAULT_CONFIG, d: -100 });
+      const at0     = getShaderUniforms({ ...DEFAULT_CONFIG, d: 0 });
+      const at100   = getShaderUniforms({ ...DEFAULT_CONFIG, d: 100 });
+
+      expect(atNeg100.find((u) => u.name === "dreamy")!.value).toBeCloseTo(-1.0);
+      expect(at0.find((u) => u.name === "dreamy")!.value).toBeCloseTo(0.0);
+      expect(at100.find((u) => u.name === "dreamy")!.value).toBeCloseTo(1.0);
+    });
+
+    it("passes bloomThreshold through unchanged", () => {
+      const defaultThreshold = getShaderUniforms(DEFAULT_CONFIG);
+      expect(defaultThreshold.find((u) => u.name === "bloomThreshold")!.value).toBeCloseTo(0.7);
+
+      const customThreshold = getShaderUniforms(DEFAULT_CONFIG, undefined, 0.55);
+      expect(customThreshold.find((u) => u.name === "bloomThreshold")!.value).toBeCloseTo(0.55);
+    });
   });
 
   describe("optional field defaults", () => {
@@ -123,6 +143,16 @@ describe("getShaderUniforms", () => {
     it("defaults invertFeather to 0 when fi is undefined", () => {
       const uniforms = getShaderUniforms(minimal);
       expect(uniforms.find((u) => u.name === "invertFeather")!.value).toBe(0.0);
+    });
+
+    it("defaults dreamy to 0 when d is undefined", () => {
+      const uniforms = getShaderUniforms(minimal);
+      expect(uniforms.find((u) => u.name === "dreamy")!.value).toBe(0.0);
+    });
+
+    it("defaults bloomThreshold to 0.7 when not provided", () => {
+      const uniforms = getShaderUniforms(minimal);
+      expect(uniforms.find((u) => u.name === "bloomThreshold")!.value).toBeCloseTo(0.7);
     });
   });
 
@@ -190,6 +220,8 @@ describe("getShaderCode", () => {
       "uniform vec2 itemSize",
       "uniform vec2 shapeSize",
       "uniform float shapeType",
+      "uniform float dreamy",
+      "uniform float bloomThreshold",
     ];
     for (const uniform of expectedUniforms) {
       expect(code).toContain(uniform);

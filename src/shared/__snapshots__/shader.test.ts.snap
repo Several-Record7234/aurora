@@ -15,6 +15,8 @@ exports[`getShaderCode > shader code is stable (snapshot) 1`] = `
     uniform vec2 itemSize;
     uniform vec2 shapeSize;
     uniform float shapeType;
+    uniform float dreamy;
+    uniform float bloomThreshold;
 
     vec3 rgb2hsv(vec3 c) {
       vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -147,6 +149,34 @@ exports[`getShaderCode > shader code is stable (snapshot) 1`] = `
       return fade;
     }
 
+    // ── Dreamy / Crisp blur kernel ──
+    // Samples 16 screen-space neighbours in an evenly-spaced ring at radius R.
+    // Used for both bloom (dreamy > 0) and unsharp mask (dreamy < 0).
+    // Only called when dreamy != 0 — the if-guard in main prevents any
+    // extra scene.eval() calls when the slider is at its centre position.
+
+    vec3 computeBlur(vec2 uv) {
+      const float R = 2.0;
+      vec3 acc = vec3(0.0);
+      acc += scene.eval(uv + vec2( 0.000,  1.000) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.383,  0.924) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.707,  0.707) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.924,  0.383) * R).rgb;
+      acc += scene.eval(uv + vec2( 1.000,  0.000) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.924, -0.383) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.707, -0.707) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.383, -0.924) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.000, -1.000) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.383, -0.924) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.707, -0.707) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.924, -0.383) * R).rgb;
+      acc += scene.eval(uv + vec2(-1.000,  0.000) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.924,  0.383) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.707,  0.707) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.383,  0.924) * R).rgb;
+      return acc / 16.0;
+    }
+
     half4 main(vec2 coord) {
       // Corrected coordinate: shifts the origin to match the actual
       // item bounds (compensates for shape-specific origin offsets)
@@ -178,7 +208,35 @@ exports[`getShaderCode > shader code is stable (snapshot) 1`] = `
 
       vec3 graded = mix(adjusted, blended, opacity);
 
-      // ── 4. Feather mask (uses corrected coord for proper origin) ──
+      // ── 4. Dreamy / Crisp (blur-based; skipped entirely when dreamy == 0) ──
+      // dreamy uniform range: -1.0 (full crisp) to +1.0 (full dreamy)
+      if (dreamy != 0.0) {
+        vec3 blurred = computeBlur(uv);
+
+        // computeBlur samples scene.eval() — the raw scene — not the post-HSLO
+        // signal. Apply the same saturation transform that was applied to graded
+        // so both sides of the bloom/unsharp arithmetic stay in the same colour
+        // space. Without this, at low saturation blurred retains the original
+        // scene colours and causes colour bleed when mixed with a near-grey graded.
+        float blurLuma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+        blurred = mix(vec3(blurLuma), blurred, saturation);
+
+        if (dreamy > 0.0) {
+          // Bloom path: extract bright regions of the blur and add back at
+          // dreamy strength. Only pixels above the luminance threshold
+          // contribute, giving a soft glow around bright scene areas.
+          float luma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+          float brightMask = smoothstep(bloomThreshold, bloomThreshold + 0.15, luma);
+          graded = clamp(graded + dreamy * brightMask * blurred, 0.0, 1.0);
+        } else {
+          // Unsharp mask path: dreamy is negative, so abs() gives the strength.
+          // output = original + |strength| * (original - blurred)
+          float strength = -dreamy;
+          graded = clamp(graded + strength * (graded - blurred), 0.0, 1.0);
+        }
+      }
+
+      // ── 5. Feather mask (uses corrected coord for proper origin) ──
       float fade = computeFeather(corrected);
       vec3 result = mix(color.rgb, graded, fade);
 

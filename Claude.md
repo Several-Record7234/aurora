@@ -31,3 +31,13 @@ Available at `../owlbear-rodeo-extensions-SKILL.md`
 - SkSL shaders for colour grading (not standard GLSL — OBR uses Skia's shading language)
 - POST_PROCESS layer usage means potential interaction with other extensions on the same layer (e.g. dynamic-fog-plus)
 - Preset system: 4 built-in + 2 user-customizable slots stored in scene metadata
+
+## Known Shader Behaviours
+
+- **Blur samples raw scene, not post-HSLO signal**: `computeBlur` calls `scene.eval()` which returns original scene colours before any grading. The dreamy/crisp block corrects for this by applying the same saturation transform to `blurred` before use (`mix(vec3(blurLuma), blurred, saturation)`). This keeps bloom and unsharp mask in the same colour space as `graded`. Do not remove this correction — without it, low-saturation scenes bleed colour and high-strength unsharp mask over-saturates.
+
+## OBR Image Access (proven facts)
+
+- **All scene images are CDN-hosted**: OBR re-hosts any uploaded asset on its own CDN before writing the URL to metadata. There are no externally-hosted images in a scene — `image.url` on any item always resolves to an OBR CDN address.
+- **Canvas pixel access works**: OBR CDN images carry CORS headers that permit `getImageData()` on an offscreen canvas. Fetch the URL with `img.crossOrigin = "anonymous"`, draw to canvas, call `getImageData()` — no security error. Proven in Sending and Murmur for token avatar sampling.
+- **Implemented in Aurora**: CPU-side luminance histogram for adaptive bloom threshold. Computed just-in-time in `src/menu/main.ts:updateBloomThreshold()` when the Aurora menu opens. Images are area-weighted by world-space bounds so large map tiles dominate over small props. See `owlbear-rodeo-extensions-SKILL.md` for the sampling pattern.

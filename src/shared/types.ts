@@ -18,6 +18,7 @@
  *   b  — Blend mode    (0–3, index into BLEND_MODES)
  *   f  — Feather       (0–100, edge-fade zone as % of shape half-size)
  *   fi — Feather invert (false = fade edges, true = fade centre)
+ *   d  — Dreamy        (-100–100, negative = unsharp/crisp, zero = pass-through, positive = bloom/dreamy)
  *   n  — Name          (user-facing preset label)
  */
 
@@ -60,6 +61,7 @@ export interface AuroraConfig extends HSLOValues {
   b?: BlendModeValue;  // Blend mode index (see BLEND_MODES); absent in older configs
   f?: number;          // Feather: 0 to 100 (% of radius for edge fade); absent in older configs
   fi?: boolean;        // Feather invert: false = fade edges, true = fade centre; absent in older configs
+  d?: number;          // Dreamy: -100 to 100 (negative = unsharp/crisp, zero = pass-through, positive = bloom); absent in older configs
 }
 
 export const DEFAULT_CONFIG: Readonly<AuroraConfig> = Object.freeze({
@@ -71,6 +73,7 @@ export const DEFAULT_CONFIG: Readonly<AuroraConfig> = Object.freeze({
   b: 3 as BlendModeValue,  // Color blend mode
   f: 0,  // No feather
   fi: false,
+  d: 0,  // No dreamy/crisp effect
 });
 
 // ── Presets (stored in room metadata) ─────────────────────────────
@@ -83,6 +86,7 @@ export interface Preset extends HSLOValues {
   b?: BlendModeValue; // Blend mode index (see BLEND_MODES); absent in older presets
   f?: number;         // Feather: 0 to 100 (% of shape half-size for edge fade)
   fi?: boolean;       // Feather invert: false = fade edges, true = fade centre
+  d?: number;         // Dreamy: -100 to 100; absent in older presets
 }
 
 export type Presets = Array<Preset | null>;
@@ -103,10 +107,10 @@ export function truncatePresetName(name: string): string {
  * Blend modes: 0=Multiply, 1=Overlay, 2=Soft Light, 3=Color
  */
 export const DEFAULT_PRESETS: readonly (Preset | null)[] = Object.freeze([
-  { n: "Midnight",    s: 25,  l: 30, h: -115,  o: 40, b: 3 as BlendModeValue, f: 0, fi: false },  // Color
-  { n: "Golden Hour", s: 120, l: 80, h: 30,   o: 20, b: 2 as BlendModeValue, f: 0, fi: false },  // Soft Light
-  { n: "Pre-Dawn",    s: 80,  l: 50, h: -150, o: 40, b: 3 as BlendModeValue, f: 0, fi: false },  // Color
-  { n: "Blood Moon",  s: 35,  l: 40, h: 0,    o: 50, b: 0 as BlendModeValue, f: 0, fi: false },  // Multiply
+  { n: "Midnight",    s: 25,  l: 30, h: -115,  o: 40, b: 3 as BlendModeValue, f: 0, fi: false, d: 0 },  // Color
+  { n: "Golden Hour", s: 120, l: 80, h: 30,   o: 20, b: 2 as BlendModeValue, f: 0, fi: false, d: 0 },  // Soft Light — candidate for positive d once tuned
+  { n: "Pre-Dawn",    s: 80,  l: 50, h: -150, o: 40, b: 3 as BlendModeValue, f: 0, fi: false, d: 0 },  // Color
+  { n: "Blood Moon",  s: 35,  l: 40, h: 0,    o: 50, b: 0 as BlendModeValue, f: 0, fi: false, d: 0 },  // Multiply
   null,
   null,
 ]);
@@ -121,9 +125,10 @@ export function isAuroraConfig(val: unknown): val is AuroraConfig {
     typeof obj.l === "number" && obj.l >= 0 && obj.l <= 200 &&
     typeof obj.h === "number" && obj.h >= -180 && obj.h <= 180 &&
     typeof obj.o === "number" && obj.o >= 0 && obj.o <= 100 &&
-    typeof obj.e === "boolean"
-    // b, f, fi are optional for backwards compatibility — older configs
+    typeof obj.e === "boolean" &&
+    // b, f, fi, d are optional for backwards compatibility — older configs
     // without them use defaults in getShaderUniforms
+    (obj.d === undefined || (typeof obj.d === "number" && obj.d >= -100 && obj.d <= 100))
   );
 }
 
@@ -146,7 +151,8 @@ export function isPresets(val: unknown): val is Presets {
         typeof obj.s === "number" && obj.s >= 0 && obj.s <= 200 &&
         typeof obj.l === "number" && obj.l >= 0 && obj.l <= 200 &&
         typeof obj.h === "number" && obj.h >= -180 && obj.h <= 180 &&
-        typeof obj.o === "number" && obj.o >= 0 && obj.o <= 100;
+        typeof obj.o === "number" && obj.o >= 0 && obj.o <= 100 &&
+        (obj.d === undefined || (typeof obj.d === "number" && obj.d >= -100 && obj.d <= 100));
       // Truncate overlong names rather than rejecting the entire array
       if (valid && typeof obj.n === "string" && obj.n.length > MAX_NAME_LENGTH) {
         obj.n = truncatePresetName(obj.n);

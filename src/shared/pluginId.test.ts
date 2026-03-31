@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from "vitest";
 import { getPluginId } from "./pluginId";
-import { CONFIG_KEY, LAST_CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY } from "./keys";
+import { CONFIG_KEY, LAST_CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY, LUMA_KEY } from "./keys";
 
 describe("getPluginId", () => {
   it("prefixes with the hosting URL", () => {
@@ -37,8 +37,12 @@ describe("metadata keys", () => {
     expect(EFFECT_SOURCE_KEY).toBe("https://aurora-0nm6.onrender.com/sourceItemId");
   });
 
+  it("LUMA_KEY is correct", () => {
+    expect(LUMA_KEY).toBe("https://aurora-0nm6.onrender.com/luma");
+  });
+
   it("all keys are unique", () => {
-    const keys = [CONFIG_KEY, LAST_CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY];
+    const keys = [CONFIG_KEY, LAST_CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY, LUMA_KEY];
     expect(new Set(keys).size).toBe(keys.length);
   });
 });

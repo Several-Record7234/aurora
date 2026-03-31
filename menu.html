@@ -9,7 +9,7 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      padding: 12px;
+      padding: 8px;
       background: var(--bg-default);
       color: var(--text-primary);
       height: 100vh;
@@ -28,7 +28,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 10px;
+      margin-bottom: 6px;
     }
 
     .header-title {
@@ -81,7 +81,7 @@
     /* ── Preset Section ──────────────────── */
 
     .preset-section {
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     .preset-select {
@@ -97,7 +97,7 @@
 
     .preset-btn {
       width: 100%;
-      padding: 7px 10px;
+      padding: 5px 10px;
       border: none;
       border-radius: 4px;
       font-size: 12px;
@@ -123,15 +123,15 @@
       color: var(--text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-top: 10px;
-      margin-bottom: 6px;
+      margin-top: 5px;
+      margin-bottom: 4px;
       text-align: center;
     }
 
     /* ── Sliders ─────────────────────────── */
 
     .slider-group {
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
 
     .slider-group:last-child {
@@ -141,7 +141,7 @@
     .slider-label {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 2px;
+      margin-bottom: 1px;
       font-size: 12px;
       color: var(--text-secondary);
     }
@@ -205,7 +205,7 @@
     .divider {
       height: 1px;
       background: var(--border-color);
-      margin: 10px 0;
+      margin: 6px 0;
     }
 
     /* ── Action Buttons (Reset / Remove) ── */
@@ -218,7 +218,7 @@
     .reset-btn,
     .remove-btn {
       flex: 1;
-      padding: 8px;
+      padding: 6px 8px;
       background: none;
       border-radius: 4px;
       font-size: 12px;
@@ -439,7 +439,18 @@
       </div>
     </div>
 
-    <!-- 6. Divider -->
+    <!-- 6. Crisp / Dreamy -->
+    <div class="section-header">Crisp &larr;&nbsp;&nbsp;&rarr; Dreamy</div>
+
+    <div class="slider-group">
+      <div class="slider-label">
+        <span id="dreamyLabel">&#8212;</span>
+        <span class="slider-value" id="dreamyValue">0</span>
+      </div>
+      <input type="range" id="dreamySlider" min="-100" max="100" value="0">
+    </div>
+
+    <!-- 7. Divider -->
     <div class="divider"></div>
 
     <!-- 7. Reset / Remove -->

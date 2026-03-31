@@ -55,6 +55,14 @@ exports[`DEFAULT_PRESETS → shader uniforms > Blood Moon produces stable unifor
     "name": "shapeType",
     "value": 0,
   },
+  {
+    "name": "dreamy",
+    "value": 0,
+  },
+  {
+    "name": "bloomThreshold",
+    "value": 0.7,
+  },
 ]
 `;
 
@@ -112,6 +120,14 @@ exports[`DEFAULT_PRESETS → shader uniforms > DEFAULT_CONFIG (identity) produce
   {
     "name": "shapeType",
     "value": 0,
+  },
+  {
+    "name": "dreamy",
+    "value": 0,
+  },
+  {
+    "name": "bloomThreshold",
+    "value": 0.7,
   },
 ]
 `;
@@ -171,6 +187,14 @@ exports[`DEFAULT_PRESETS → shader uniforms > Golden Hour produces stable unifo
     "name": "shapeType",
     "value": 0,
   },
+  {
+    "name": "dreamy",
+    "value": 0,
+  },
+  {
+    "name": "bloomThreshold",
+    "value": 0.7,
+  },
 ]
 `;
 
@@ -229,6 +253,14 @@ exports[`DEFAULT_PRESETS → shader uniforms > Midnight produces stable uniforms
     "name": "shapeType",
     "value": 0,
   },
+  {
+    "name": "dreamy",
+    "value": 0,
+  },
+  {
+    "name": "bloomThreshold",
+    "value": 0.7,
+  },
 ]
 `;
 
@@ -286,6 +318,14 @@ exports[`DEFAULT_PRESETS → shader uniforms > Pre-Dawn produces stable uniforms
   {
     "name": "shapeType",
     "value": 0,
+  },
+  {
+    "name": "dreamy",
+    "value": 0,
+  },
+  {
+    "name": "bloomThreshold",
+    "value": 0.7,
   },
 ]
 `;

@@ -21,7 +21,7 @@
 import OBR, { buildEffect, Effect, Item, isShape } from "@owlbear-rodeo/sdk";
 import { getShaderCode, getShaderUniforms, ShaderGeometry, SHAPE_TYPE_RECT, SHAPE_TYPE_CIRCLE, SHAPE_TYPE_TRIANGLE, SHAPE_TYPE_HEXAGON } from "../shared/shader";
 import { AuroraConfig, isAuroraConfig } from "../shared/types";
-import { CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY } from "../shared/keys";
+import { CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY, LUMA_KEY } from "../shared/keys";
 
 // ── Effect Snapshot Cache ─────────────────────────────────────────
 //
@@ -48,7 +48,8 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
   const shapeType = isShape(item) ? item.shapeType : "";
   return JSON.stringify([
     config.s, config.l, config.h, config.o, config.e, config.b ?? 0,
-    config.f ?? 0, config.fi ?? false,
+    config.f ?? 0, config.fi ?? false, config.d ?? 0,
+    typeof item.metadata[LUMA_KEY] === "number" ? item.metadata[LUMA_KEY] : 0.7,
     item.position.x, item.position.y,
     item.rotation,
     item.scale.x, item.scale.y,
@@ -334,8 +335,11 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
     .build();
 
   // Set shader properties directly on the built object (not via builder)
+  const rawLuma = parent.metadata[LUMA_KEY];
+  const bloomThreshold = typeof rawLuma === "number" && rawLuma > 0 ? rawLuma : 0.7;
+
   effect.sksl = getShaderCode();
-  effect.uniforms = getShaderUniforms(config, await getShaderGeometry(parent));
+  effect.uniforms = getShaderUniforms(config, await getShaderGeometry(parent), bloomThreshold);
 
   effect.layer = "POST_PROCESS";
   // Prevent OBR's auto-z-index from overriding the layer-composed value set above

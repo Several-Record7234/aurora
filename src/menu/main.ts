@@ -13,7 +13,7 @@
  * which triggers the normal reconcile path and syncs to all clients.
  */
 
-import OBR, { Effect } from "@owlbear-rodeo/sdk";
+import OBR, { Effect, isImage, type Image as OBRImage } from "@owlbear-rodeo/sdk";
 import {
   AuroraConfig,
   BlendModeValue,
@@ -29,7 +29,7 @@ import {
 } from "../shared/types";
 import { getShaderUniforms } from "../shared/shader";
 import { loadPresets, saveToPresetSlot, getPresetsKey } from "../shared/presets";
-import { CONFIG_KEY, LAST_CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY } from "../shared/keys";
+import { CONFIG_KEY, LAST_CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY, LUMA_KEY } from "../shared/keys";
 import { applyTheme } from "../shared/theme";
 
 // ── DOM Elements ──────────────────────────────────────────────────
@@ -48,6 +48,8 @@ interface UIElements {
   featherSlider: HTMLInputElement;
   featherValue: HTMLElement;
   invertBtn: HTMLButtonElement;
+  dreamySlider: HTMLInputElement;
+  dreamyValue: HTMLElement;
   presetSelect: HTMLSelectElement;
   savePresetBtn: HTMLButtonElement;
   resetBtn: HTMLButtonElement;
@@ -68,6 +70,8 @@ function resolveUI(): UIElements | null {
   const featherSlider = document.getElementById("featherSlider") as HTMLInputElement | null;
   const featherValue = document.getElementById("featherValue");
   const invertBtn = document.getElementById("invertBtn") as HTMLButtonElement | null;
+  const dreamySlider = document.getElementById("dreamySlider") as HTMLInputElement | null;
+  const dreamyValue = document.getElementById("dreamyValue");
   const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement | null;
   const savePresetBtn = document.getElementById("savePresetBtn") as HTMLButtonElement | null;
   const resetBtn = document.getElementById("resetBtn") as HTMLButtonElement | null;
@@ -77,6 +81,7 @@ function resolveUI(): UIElements | null {
     !toggle || !satSlider || !lightSlider || !hueSlider || !opacitySlider ||
     !satValue || !lightValue || !hueValue || !opacityValue ||
     !featherSlider || !featherValue || !invertBtn ||
+    !dreamySlider || !dreamyValue ||
     !presetSelect || !savePresetBtn || !resetBtn || !removeBtn
   ) {
     return null;
@@ -86,6 +91,7 @@ function resolveUI(): UIElements | null {
     toggle, satSlider, lightSlider, hueSlider, opacitySlider,
     satValue, lightValue, hueValue, opacityValue,
     blendSelect, featherSlider, featherValue, invertBtn,
+    dreamySlider, dreamyValue,
     presetSelect, savePresetBtn, resetBtn, removeBtn,
   };
 }
@@ -125,7 +131,7 @@ let presets: Presets = [...EMPTY_PRESETS];
 /** Uniform names that are derived from AuroraConfig (safe to patch) */
 const CONFIG_UNIFORMS = new Set([
   "saturation", "lightness", "hue", "opacity",
-  "blendMode", "feather", "invertFeather",
+  "blendMode", "feather", "invertFeather", "dreamy",
 ]);
 
 async function previewLocal(): Promise<void> {
@@ -178,6 +184,7 @@ async function readConfigFromItems(): Promise<AuroraConfig> {
         b:  config.b  ?? DEFAULT_CONFIG.b,
         f:  config.f  ?? DEFAULT_CONFIG.f,
         fi: config.fi ?? DEFAULT_CONFIG.fi,
+        d:  config.d  ?? DEFAULT_CONFIG.d,
       };
       return withDefaults;
     }
@@ -233,6 +240,188 @@ function updateHueSliderTrack() {
   ui.hueSlider.style.background = hueToTrackColor(hue);
 }
 
+// ── Luminance Histogram ───────────────────────────────────────────
+//
+// Computes a scene-adaptive bloom threshold by sampling the luminance of
+// all OBR scene image items that overlap the Aurora shape, building a
+// combined histogram, and finding the luma value at the 80th percentile
+// (i.e. the top 20% of pixels will qualify for bloom).
+//
+// All scene images are CDN-hosted by OBR and carry CORS headers that
+// permit canvas getImageData() access. The computation runs once when
+// the menu opens (just-in-time), so the threshold adapts to the actual
+// map without any per-frame GPU cost.
+
+/** Fraction of the brightest pixels that should qualify for bloom */
+const BLOOM_TOP_FRACTION = 0.20;
+
+/**
+ * Fetch an OBR CDN image URL and return its pixel data downsampled to
+ * 64×64 for efficient histogram computation. Returns null on any error.
+ */
+async function fetchImagePixels(url: string): Promise<Uint8ClampedArray | null> {
+  return new Promise((resolve) => {
+    // Use globalThis.Image to avoid collision with OBR's Image type
+    const img = new globalThis.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0, 64, 64);
+        resolve(ctx.getImageData(0, 0, 64, 64).data);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+
+/**
+ * Compute and store a scene-adaptive bloom threshold for the given item.
+ *
+ * Finds all OBR Image items whose bounds overlap the Aurora shape, samples
+ * their pixel data into a combined BT.709 luminance histogram, then finds
+ * the luma value at the (1 - BLOOM_TOP_FRACTION) percentile. The result
+ * is written to item metadata under LUMA_KEY so the background-page effect
+ * manager picks it up and passes it as a shader uniform on the next rebuild.
+ *
+ * Falls back silently (no write) if no overlapping images are found or if
+ * all image fetches fail.
+ */
+async function updateBloomThreshold(itemId: string): Promise<void> {
+  // Get the Aurora item's rendered bounds for overlap detection
+  let centerX: number, centerY: number, halfW: number, halfH: number;
+  try {
+    const bounds = await OBR.scene.items.getItemBounds([itemId]);
+    centerX = (bounds.min.x + bounds.max.x) / 2;
+    centerY = (bounds.min.y + bounds.max.y) / 2;
+    halfW   = (bounds.max.x - bounds.min.x) / 2;
+    halfH   = (bounds.max.y - bounds.min.y) / 2;
+  } catch {
+    return;
+  }
+  if (halfW <= 0 || halfH <= 0) return;
+
+  // Collect candidate images on visually rendered layers, then resolve each
+  // one's actual rendered bounds via getItemBounds (in parallel).
+  //
+  // We cannot use item.position for overlap detection because OBR Image items
+  // store their top-left corner in position (not the centre). getItemBounds
+  // returns the true world-space bounding box and is the same approach used
+  // by the effect manager. Running all calls in parallel keeps total latency
+  // close to a single round-trip regardless of image count.
+  const SAMPLE_LAYERS = new Set(["MAP", "DRAWING", "PROP", "MOUNT", "CHARACTER"]);
+  const candidates = await OBR.scene.items.getItems(
+    (item): item is OBRImage =>
+      isImage(item) &&
+      SAMPLE_LAYERS.has(item.layer),
+  );
+
+  // DEBUG: show aurora bounds and all candidates before overlap filtering
+  console.log(`[Aurora] bloomThreshold: aurora bounds centre=(${centerX.toFixed(0)},${centerY.toFixed(0)}) half=(${halfW.toFixed(0)}×${halfH.toFixed(0)})`);
+  console.log(`[Aurora] bloomThreshold: ${candidates.length} candidate image(s) on sample layers`);
+
+  const boundsResults = await Promise.allSettled(
+    candidates.map((item) => OBR.scene.items.getItemBounds([item.id])),
+  );
+
+  // Build overlapping list paired with world-space area so each image's
+  // histogram contribution can be weighted by how much visual space it covers.
+  const overlapping: { item: OBRImage; area: number }[] = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const result = boundsResults[i];
+    if (result.status !== "fulfilled") {
+      console.log(`[Aurora] bloomThreshold:   SKIPPED (bounds fetch failed): id=${candidates[i].id.slice(-6)}`);
+      continue;
+    }
+    const b = result.value;
+    const bCX = (b.min.x + b.max.x) / 2;
+    const bCY = (b.min.y + b.max.y) / 2;
+    const bHW = (b.max.x - b.min.x) / 2;
+    const bHH = (b.max.y - b.min.y) / 2;
+    const overlaps = (
+      Math.abs(centerX - bCX) < halfW + bHW &&
+      Math.abs(centerY - bCY) < halfH + bHH
+    );
+    const area = (b.max.x - b.min.x) * (b.max.y - b.min.y);
+    // DEBUG: per-candidate overlap result
+    console.log(`[Aurora] bloomThreshold:   id=${candidates[i].id.slice(-6)} layer=${candidates[i].layer} bounds=(${b.min.x.toFixed(0)},${b.min.y.toFixed(0)})→(${b.max.x.toFixed(0)},${b.max.y.toFixed(0)}) area=${area.toFixed(0)} overlaps=${overlaps}`);
+    if (overlaps) overlapping.push({ item: candidates[i], area });
+  }
+
+  // DEBUG: log how many images will contribute to the histogram
+  console.log(`[Aurora] bloomThreshold: sampling ${overlapping.length} image(s) overlapping Aurora shape`);
+
+  if (overlapping.length === 0) return;
+
+  // Weight each image's histogram contribution by its world-space area so that
+  // a large map tile dominates over a small prop at the same image resolution.
+  const totalArea = overlapping.reduce((sum, { area }) => sum + area, 0);
+
+  // Float64 accumulator to handle fractional per-pixel weights accurately.
+  const histogram = new Float64Array(256);
+  let total = 0;
+
+  for (const { item, area } of overlapping) {
+    const pixels = await fetchImagePixels(item.image.url);
+    // DEBUG: log per-image result (URL tail is enough to identify the asset)
+    const urlTail = item.image.url.split("/").pop() ?? item.image.url;
+    if (!pixels) {
+      console.log(`[Aurora] bloomThreshold:   skipped (fetch failed): ${urlTail}`);
+      continue;
+    }
+    // Weight proportional to world-space area share. If somehow totalArea is
+    // zero (degenerate bounds), fall back to equal weighting.
+    const weight = totalArea > 0 ? area / totalArea : 1;
+    let itemLuma = 0, itemPixels = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (pixels[i + 3] < 128) continue; // skip transparent pixels
+      const luma = 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+      histogram[Math.min(255, Math.floor(luma))] += weight;
+      itemLuma += luma;
+      itemPixels++;
+      total += weight;
+    }
+    // DEBUG: per-image stats
+    const avgLuma255 = itemPixels > 0 ? (itemLuma / itemPixels).toFixed(1) : "n/a";
+    console.log(`[Aurora] bloomThreshold:   layer=${item.layer} weight=${weight.toFixed(3)} avgLuma=${avgLuma255}/255  ${urlTail}`);
+  }
+
+  if (total === 0) return;
+
+  // Walk the histogram from the dark end to find the (1 - BLOOM_TOP_FRACTION)
+  // percentile — the luma value below which that fraction of pixels fall.
+  // Everything above this value is in the top BLOOM_TOP_FRACTION brightest pixels.
+  const cutoff = Math.floor(total * (1 - BLOOM_TOP_FRACTION));
+  let threshold = 0.7;
+  let cumulative = 0;
+  for (let i = 0; i < 256; i++) {
+    cumulative += histogram[i];
+    if (cumulative >= cutoff) {
+      threshold = i / 255;
+      break;
+    }
+  }
+
+  // DEBUG: log final result
+  console.log(`[Aurora] bloomThreshold: total pixels=${total}, cutoff=${cutoff}, threshold=${threshold.toFixed(3)} (${(threshold * 255).toFixed(0)}/255)`);
+
+  // Persist to item metadata — the effect manager will rebuild the shader
+  // effect with the new uniform value when it sees the metadata change.
+  await OBR.scene.items.updateItems([itemId], (items) => {
+    for (const item of items) {
+      item.metadata[LUMA_KEY] = threshold;
+    }
+  });
+}
+
 // ── Preset Matching ───────────────────────────────────────────────
 
 /**
@@ -249,7 +438,8 @@ function findMatchingPreset(): number {
       p.o === currentConfig.o &&
       (p.b  ?? 3)     === (currentConfig.b  ?? 3) &&
       (p.f  ?? 0)     === (currentConfig.f  ?? 0) &&
-      (p.fi ?? false) === (currentConfig.fi ?? false)
+      (p.fi ?? false) === (currentConfig.fi ?? false) &&
+      (p.d  ?? 0)     === (currentConfig.d  ?? 0)
   );
 }
 
@@ -293,6 +483,10 @@ function updateUI() {
   ui.featherSlider.value = (currentConfig.f ?? 0).toString();
   ui.featherValue.textContent = `${currentConfig.f ?? 0}%`;
   ui.invertBtn.classList.toggle("active", currentConfig.fi ?? false);
+
+  // Dreamy
+  ui.dreamySlider.value = (currentConfig.d ?? 0).toString();
+  ui.dreamyValue.textContent = `${currentConfig.d ?? 0}`;
 
   // Toggle
   ui.toggle.classList.toggle("active", currentConfig.e);
@@ -339,7 +533,8 @@ function updatePresetDropdown() {
       const featherStr = (preset.f ?? 0) > 0
         ? ` F:${preset.f}%${preset.fi ? "\u21BA" : ""}`
         : "";
-      option.textContent = `${truncatePresetName(preset.n)} (S:${preset.s} L:${preset.l} H:${preset.h} O:${preset.o}${featherStr} \u2022 ${blendLabel})`;
+      const dreamyStr = (preset.d ?? 0) !== 0 ? ` D:${preset.d}` : "";
+      option.textContent = `${truncatePresetName(preset.n)} (S:${preset.s} L:${preset.l} H:${preset.h} O:${preset.o}${featherStr}${dreamyStr} \u2022 ${blendLabel})`;
       ui!.presetSelect.appendChild(option);
     }
   });
@@ -426,6 +621,18 @@ function setupEventListeners() {
     await writeConfigToItems();
   });
 
+  // Dreamy slider
+  ui.dreamySlider.addEventListener("input", () => {
+    if (!ui) return;
+    const value = parseInt(ui.dreamySlider.value, 10);
+    if (isNaN(value)) return;
+    currentConfig.d = value;
+    ui.dreamyValue.textContent = `${value}`;
+    updatePresetSelection();
+    previewLocal();
+  });
+  ui.dreamySlider.addEventListener("change", () => writeConfigToItems());
+
   // Preset select — immediately apply the selected preset
   ui.presetSelect.addEventListener("change", async () => {
     if (!ui) return;
@@ -446,6 +653,7 @@ function setupEventListeners() {
       b:  preset.b  ?? currentConfig.b,
       f:  preset.f  ?? 0,
       fi: preset.fi ?? false,
+      d:  preset.d  ?? 0,
     };
     updateUI();
     await writeConfigToItems();
@@ -464,6 +672,7 @@ function setupEventListeners() {
     currentConfig.o = 0;
     currentConfig.f = 0;
     currentConfig.fi = false;
+    currentConfig.d = 0;
     updateUI();
     await writeConfigToItems();
   });
@@ -609,9 +818,18 @@ OBR.onReady(async () => {
   const selection = await OBR.player.getSelection();
   selectedItemIds = selection ?? [];
 
-  // Load the config from the selected item
+  // Load the config from the selected item and render UI immediately
   currentConfig = await readConfigFromItems();
   updateUI();
+
+  // Compute adaptive bloom threshold from scene image luminance in the
+  // background — UI is already visible, effect manager will rebuild the
+  // shader effect when the metadata write lands.
+  if (selectedItemIds.length > 0) {
+    updateBloomThreshold(selectedItemIds[0]).catch(() => {
+      // Non-fatal: falls back to the hardcoded default threshold (0.7)
+    });
+  }
 
   // Load presets
   presets = await loadPresets();
@@ -634,7 +852,7 @@ OBR.onReady(async () => {
     for (const item of relevant) {
       const config = item.metadata[CONFIG_KEY];
       if (isAuroraConfig(config)) {
-        currentConfig = { ...config, b: config.b ?? DEFAULT_CONFIG.b, f: config.f ?? DEFAULT_CONFIG.f, fi: config.fi ?? DEFAULT_CONFIG.fi };
+        currentConfig = { ...config, b: config.b ?? DEFAULT_CONFIG.b, f: config.f ?? DEFAULT_CONFIG.f, fi: config.fi ?? DEFAULT_CONFIG.fi, d: config.d ?? DEFAULT_CONFIG.d };
         updateUI();
         break;
       }

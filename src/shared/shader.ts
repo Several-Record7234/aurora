@@ -31,7 +31,9 @@ import type { AuroraConfig } from "./types";
  *   invertFeather: bool   → 0.0|1.0   (0 = fade edges, 1 = fade centre)
  *   itemSize:      vec2               (attachment bounds size in local coords)
  *   shapeSize:     vec2               (actual shape visual size; differs from itemSize for hex/tri)
- *   shapeType:     0–3    → 0.0–3.0   (0=rect/image, 1=circle, 2=triangle, 3=hexagon)
+ *   shapeType:      0–3    → 0.0–3.0   (0=rect/image, 1=circle, 2=triangle, 3=hexagon)
+ *   dreamy:        -100–100 → -1.0–1.0 (negative = unsharp/crisp, zero = pass-through, positive = bloom)
+ *   bloomThreshold: 0–1    → direct    (80th-percentile luma from CPU histogram; default 0.7)
  */
 
 /** Shape type indices for the shapeType uniform */
@@ -54,7 +56,11 @@ const DEFAULT_GEOMETRY: ShaderGeometry = {
   shapeType: SHAPE_TYPE_RECT,
 };
 
-export function getShaderUniforms(config: AuroraConfig, geometry: ShaderGeometry = DEFAULT_GEOMETRY) {
+export function getShaderUniforms(
+  config: AuroraConfig,
+  geometry: ShaderGeometry = DEFAULT_GEOMETRY,
+  bloomThreshold: number = 0.7,
+) {
   return [
     { name: "saturation", value: config.s / 100.0 },
     { name: "lightness", value: config.l / 100.0 },
@@ -67,6 +73,8 @@ export function getShaderUniforms(config: AuroraConfig, geometry: ShaderGeometry
     { name: "itemSize", value: geometry.itemSize },
     { name: "shapeSize", value: geometry.shapeSize },
     { name: "shapeType", value: geometry.shapeType * 1.0 },
+    { name: "dreamy", value: (config.d ?? 0) / 100.0 },
+    { name: "bloomThreshold", value: bloomThreshold },
   ];
 }
 
@@ -80,8 +88,9 @@ export function getShaderUniforms(config: AuroraConfig, geometry: ShaderGeometry
  *   4. Generate a flat tint colour from the Hue slider value
  *   5. Blend the tint over the adjusted pixel using the selected blend mode
  *   6. Mix the blended result at Opacity strength
- *   7. Apply feather mask (fade edges or centre based on invert flag)
- *   8. Output: mix between original scene and graded result via fade
+ *   7. Apply Dreamy/Crisp effect (bloom or unsharp mask via neighbour sampling; skipped at zero)
+ *   8. Apply feather mask (fade edges or centre based on invert flag)
+ *   9. Output: mix between original scene and graded result via fade
  *
  * This means Saturation and Lightness always take full effect regardless
  * of the Opacity slider. Opacity exclusively controls the strength of the
@@ -132,6 +141,8 @@ export function getShaderCode(): string {
     uniform vec2 itemSize;
     uniform vec2 shapeSize;
     uniform float shapeType;
+    uniform float dreamy;
+    uniform float bloomThreshold;
 
     vec3 rgb2hsv(vec3 c) {
       vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -264,6 +275,34 @@ export function getShaderCode(): string {
       return fade;
     }
 
+    // ── Dreamy / Crisp blur kernel ──
+    // Samples 16 screen-space neighbours in an evenly-spaced ring at radius R.
+    // Used for both bloom (dreamy > 0) and unsharp mask (dreamy < 0).
+    // Only called when dreamy != 0 — the if-guard in main prevents any
+    // extra scene.eval() calls when the slider is at its centre position.
+
+    vec3 computeBlur(vec2 uv) {
+      const float R = 2.0;
+      vec3 acc = vec3(0.0);
+      acc += scene.eval(uv + vec2( 0.000,  1.000) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.383,  0.924) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.707,  0.707) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.924,  0.383) * R).rgb;
+      acc += scene.eval(uv + vec2( 1.000,  0.000) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.924, -0.383) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.707, -0.707) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.383, -0.924) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.000, -1.000) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.383, -0.924) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.707, -0.707) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.924, -0.383) * R).rgb;
+      acc += scene.eval(uv + vec2(-1.000,  0.000) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.924,  0.383) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.707,  0.707) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.383,  0.924) * R).rgb;
+      return acc / 16.0;
+    }
+
     half4 main(vec2 coord) {
       // Corrected coordinate: shifts the origin to match the actual
       // item bounds (compensates for shape-specific origin offsets)
@@ -295,7 +334,35 @@ export function getShaderCode(): string {
 
       vec3 graded = mix(adjusted, blended, opacity);
 
-      // ── 4. Feather mask (uses corrected coord for proper origin) ──
+      // ── 4. Dreamy / Crisp (blur-based; skipped entirely when dreamy == 0) ──
+      // dreamy uniform range: -1.0 (full crisp) to +1.0 (full dreamy)
+      if (dreamy != 0.0) {
+        vec3 blurred = computeBlur(uv);
+
+        // computeBlur samples scene.eval() — the raw scene — not the post-HSLO
+        // signal. Apply the same saturation transform that was applied to graded
+        // so both sides of the bloom/unsharp arithmetic stay in the same colour
+        // space. Without this, at low saturation blurred retains the original
+        // scene colours and causes colour bleed when mixed with a near-grey graded.
+        float blurLuma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+        blurred = mix(vec3(blurLuma), blurred, saturation);
+
+        if (dreamy > 0.0) {
+          // Bloom path: extract bright regions of the blur and add back at
+          // dreamy strength. Only pixels above the luminance threshold
+          // contribute, giving a soft glow around bright scene areas.
+          float luma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+          float brightMask = smoothstep(bloomThreshold, bloomThreshold + 0.15, luma);
+          graded = clamp(graded + dreamy * brightMask * blurred, 0.0, 1.0);
+        } else {
+          // Unsharp mask path: dreamy is negative, so abs() gives the strength.
+          // output = original + |strength| * (original - blurred)
+          float strength = -dreamy;
+          graded = clamp(graded + strength * (graded - blurred), 0.0, 1.0);
+        }
+      }
+
+      // ── 5. Feather mask (uses corrected coord for proper origin) ──
       float fade = computeFeather(corrected);
       vec3 result = mix(color.rgb, graded, fade);
 

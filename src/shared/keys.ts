@@ -20,5 +20,8 @@ export const EFFECT_META_KEY = getPluginId("isEffect");
 /** Links a local effect back to its source scene item */
 export const EFFECT_SOURCE_KEY = getPluginId("sourceItemId");
 
+/** CPU-computed bloom luminance threshold (per-item, written by menu on open) */
+export const LUMA_KEY = getPluginId("luma");
+
 // UI collapse states have moved to localStorage (per-player, per-room)
 // and no longer use room metadata. See src/main.ts for the implementation.

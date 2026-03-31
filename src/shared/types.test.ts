@@ -28,7 +28,7 @@ describe("isAuroraConfig", () => {
   });
 
   it("accepts config with all optional fields", () => {
-    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, b: 2, f: 50, fi: true })).toBe(true);
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, b: 2, f: 50, fi: true, d: -50 })).toBe(true);
   });
 
   it("accepts boundary values", () => {
@@ -83,6 +83,26 @@ describe("isAuroraConfig", () => {
   it("rejects wrong type for enabled", () => {
     expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: 1 })).toBe(false);
     expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: "true" })).toBe(false);
+  });
+
+  it("accepts d absent (backwards compatibility)", () => {
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true })).toBe(true);
+  });
+
+  it("accepts d at boundary values", () => {
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, d: -100 })).toBe(true);
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, d: 0 })).toBe(true);
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, d: 100 })).toBe(true);
+  });
+
+  it("rejects out-of-range d", () => {
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, d: -101 })).toBe(false);
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, d: 101 })).toBe(false);
+  });
+
+  it("rejects non-numeric d", () => {
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, d: "50" })).toBe(false);
+    expect(isAuroraConfig({ s: 100, l: 100, h: 0, o: 0, e: true, d: true })).toBe(false);
   });
 });
 
