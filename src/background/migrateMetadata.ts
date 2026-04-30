@@ -28,14 +28,30 @@ const ROOM_KEYS = ["presets", "uiState"] as const;
 /** Old-namespace key paths that may exist on item metadata */
 const ITEM_KEYS = ["config", "isEffect", "sourceItemId"] as const;
 
+// ── Render → Cloudflare Pages namespace migration ──────────────────────────
+// When hosting moved from aurora-0nm6.onrender.com to aurora.several-record.com
+// the PLUGIN_BASE changed, which means all metadata keys changed. This migration
+// copies data from the old Render-era keys to the new CF keys and deletes the old
+// ones so it only runs once per room/item.
+
+const RENDER_BASE = "https://aurora-0nm6.onrender.com";
+
+/** Room-level keys that existed under the Render namespace */
+const RENDER_ROOM_KEYS = ["presets"] as const;
+
+/** Item-level keys that existed under the Render namespace */
+const RENDER_ITEM_KEYS = ["config", "lastConfig", "isEffect", "sourceItemId", "luma"] as const;
+
 /**
  * Migrate any old-namespace metadata to the current namespace.
  * Safe to call on every startup — it no-ops when no old keys are found.
  */
 export async function migrateMetadata(): Promise<void> {
   await migrateRoomMetadata();
+  await migrateRenderRoomMetadata();
   if (await OBR.scene.isReady()) {
     await migrateItemMetadata();
+    await migrateRenderItemMetadata();
   }
 }
 
@@ -97,4 +113,59 @@ export async function migrateItemMetadata(): Promise<void> {
   });
 
   console.log(`[Aurora] Migrated item metadata on ${itemsToUpdate.length} item(s)`);
+}
+
+// ── Render → CF migrations ─────────────────────────────────────────────────
+
+async function migrateRenderRoomMetadata(): Promise<void> {
+  const metadata = await OBR.room.getMetadata();
+  const updates: Record<string, unknown> = {};
+  let found = false;
+
+  for (const path of RENDER_ROOM_KEYS) {
+    const oldKey = `${RENDER_BASE}/${path}`;
+    const newKey = getPluginId(path);
+    if (metadata[oldKey] !== undefined && metadata[newKey] === undefined) {
+      updates[newKey] = metadata[oldKey];
+      updates[oldKey] = undefined;
+      found = true;
+    }
+  }
+
+  if (found) {
+    await OBR.room.setMetadata(updates);
+    console.log("[Aurora] Migrated room metadata from Render namespace");
+  }
+}
+
+export async function migrateRenderItemMetadata(): Promise<void> {
+  const allItems = await OBR.scene.items.getItems();
+  const itemsToUpdate: string[] = [];
+
+  for (const item of allItems) {
+    for (const path of RENDER_ITEM_KEYS) {
+      const oldKey = `${RENDER_BASE}/${path}`;
+      if (item.metadata[oldKey] !== undefined) {
+        itemsToUpdate.push(item.id);
+        break;
+      }
+    }
+  }
+
+  if (itemsToUpdate.length === 0) return;
+
+  await OBR.scene.items.updateItems(itemsToUpdate, (items) => {
+    for (const item of items) {
+      for (const path of RENDER_ITEM_KEYS) {
+        const oldKey = `${RENDER_BASE}/${path}`;
+        const newKey = getPluginId(path);
+        if (item.metadata[oldKey] !== undefined && item.metadata[newKey] === undefined) {
+          item.metadata[newKey] = item.metadata[oldKey];
+        }
+        delete item.metadata[oldKey];
+      }
+    }
+  });
+
+  console.log(`[Aurora] Migrated item metadata (Render→CF) on ${itemsToUpdate.length} item(s)`);
 }

@@ -1,6 +1,6 @@
 {
   "name": "Aurora",
-  "description": "Time-of-day Map-layer effects with 4 presets; ‘Add Aurora’, then adjust hue, saturation, lightness, opacity, and feathering",
+  "description": "Change scene mood without swapping maps. Aurora colour-grades your map layer live for all players, with four built-in presets.",
   "version": "0.9.2",
   "manifest_version": 1,
   "author": "Andrew C",

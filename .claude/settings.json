@@ -1,11 +1,18 @@
 {
   "permissions": {
     "allow": [
+      "Bash(npm install)",
+      "Bash(npm run build)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)",
       "WebFetch(domain:docs.owlbear.rodeo)",
-      "Bash(wc -l /c/Coding/aurora/src/**/*.ts /c/Coding/aurora/src/**/*.css)",
-      "Bash(chmod +x c:/Coding/aurora/.git/hooks/pre-commit)",
-      "Bash(.git/hooks/pre-commit)",
-      "Bash(file /c/Coding/aurora/dist/assets/*.js)"
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(chmod +x:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\andre\\.claude\\projects\\c--Coding-aurora"
     ]
   }
 }

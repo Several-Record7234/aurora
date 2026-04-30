@@ -62,6 +62,7 @@ export default defineConfig({
         main: resolve(__dirname, "index.html"),
         menu: resolve(__dirname, "menu.html"),
         background: resolve(__dirname, "background.html"),
+        whatsNew: resolve(__dirname, "whats-new.html"),
       },
     },
   },

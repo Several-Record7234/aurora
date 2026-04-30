@@ -483,6 +483,7 @@ function updateUI() {
   ui.featherSlider.value = (currentConfig.f ?? 0).toString();
   ui.featherValue.textContent = `${currentConfig.f ?? 0}%`;
   ui.invertBtn.classList.toggle("active", currentConfig.fi ?? false);
+  ui.invertBtn.setAttribute("aria-pressed", String(currentConfig.fi ?? false));
 
   // Dreamy
   ui.dreamySlider.value = (currentConfig.d ?? 0).toString();
@@ -490,6 +491,7 @@ function updateUI() {
 
   // Toggle
   ui.toggle.classList.toggle("active", currentConfig.e);
+  ui.toggle.setAttribute("aria-checked", String(currentConfig.e));
 
   // Hue slider track colour
   updateHueSliderTrack();
@@ -691,8 +693,12 @@ function showSaveDialog() {
 
   const dialog = document.createElement("div");
   dialog.className = "save-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "save-dialog-heading");
 
   const heading = document.createElement("h3");
+  heading.id = "save-dialog-heading";
   heading.textContent = "Save Current As...";
   dialog.appendChild(heading);
 

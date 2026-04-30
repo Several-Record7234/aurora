@@ -5,353 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aurora Settings</title>
   <link rel="stylesheet" href="/src/shared/base.css">
-  <style>
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      padding: 8px;
-      background: var(--bg-default);
-      color: var(--text-primary);
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    .container {
-      height: 100%;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    /* ── Header ──────────────────────────── */
-
-    .header-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-
-    .header-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-
-    .header-toggle {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .toggle-label {
-      font-weight: 500;
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .toggle-switch {
-      position: relative;
-      width: 40px;
-      height: 22px;
-      background: var(--border-color);
-      border-radius: 11px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-
-    .toggle-switch.active {
-      background: var(--accent-success);
-    }
-
-    .toggle-slider {
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 18px;
-      height: 18px;
-      background: white;
-      border-radius: 50%;
-      transition: transform 0.3s;
-    }
-
-    .toggle-switch.active .toggle-slider {
-      transform: translateX(18px);
-    }
-
-    /* ── Preset Section ──────────────────── */
-
-    .preset-section {
-      margin-bottom: 8px;
-    }
-
-    .preset-select {
-      width: 100%;
-      padding: 6px 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      font-size: 12px;
-      background: var(--bg-paper);
-      color: var(--text-primary);
-      margin-bottom: 6px;
-    }
-
-    .preset-btn {
-      width: 100%;
-      padding: 5px 10px;
-      border: none;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .preset-btn.save {
-      background: var(--accent-success);
-      color: white;
-    }
-
-    .preset-btn.save:hover {
-      background: var(--accent-success-dark);
-    }
-
-    /* ── Section Headers ─────────────────── */
-
-    .section-header {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-top: 5px;
-      margin-bottom: 4px;
-      text-align: center;
-    }
-
-    /* ── Sliders ─────────────────────────── */
-
-    .slider-group {
-      margin-bottom: 4px;
-    }
-
-    .slider-group:last-child {
-      margin-bottom: 0;
-    }
-
-    .slider-label {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 1px;
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .slider-value {
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-
-    input[type="range"] {
-      width: 100%;
-      height: 5px;
-      background: var(--border-color);
-      border-radius: 3px;
-      outline: none;
-      -webkit-appearance: none;
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
-      background: var(--accent-primary);
-      border-radius: 50%;
-      cursor: pointer;
-      border: none;
-    }
-
-    /* Hue slider — track colour is set dynamically via JS */
-    #hueSlider {
-      transition: background 0.1s;
-    }
-
-    /* ── Blend Mode Select ───────────────── */
-
-    .blend-group {
-      margin-bottom: 8px;
-    }
-
-    .blend-label {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2px;
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .blend-select {
-      width: 100%;
-      padding: 5px 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      font-size: 12px;
-      background: var(--bg-paper);
-      color: var(--text-primary);
-    }
-
-    /* ── Divider ─────────────────────────── */
-
-    .divider {
-      height: 1px;
-      background: var(--border-color);
-      margin: 6px 0;
-    }
-
-    /* ── Action Buttons (Reset / Remove) ── */
-
-    .action-row {
-      display: flex;
-      gap: 8px;
-    }
-
-    .reset-btn,
-    .remove-btn {
-      flex: 1;
-      padding: 6px 8px;
-      background: none;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .reset-btn {
-      color: var(--text-secondary);
-      border: 1px solid var(--border-color);
-    }
-
-    .reset-btn:hover {
-      background: var(--bg-subtle);
-      border-color: var(--text-secondary);
-      color: var(--text-primary);
-    }
-
-    .remove-btn {
-      color: var(--accent-danger);
-      border: 1px solid var(--accent-danger);
-    }
-
-    .remove-btn:hover {
-      background: var(--accent-danger);
-      color: white;
-    }
-
-    /* ── Feather Controls ────────────────── */
-
-    .feather-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .feather-slider-wrap {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .invert-btn {
-      flex-shrink: 0;
-      padding: 4px 10px;
-      border: 2px solid var(--border-color);
-      border-radius: 6px;
-      background: none;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s, color 0.2s;
-    }
-
-    .invert-btn:hover {
-      border-color: var(--text-secondary);
-    }
-
-    .invert-btn.active {
-      background: var(--accent-invert);
-      border-color: var(--accent-invert);
-      color: white;
-    }
-
-    /* ── Save Dialog ─────────────────────── */
-
-    .save-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-    }
-
-    .save-dialog {
-      background: var(--bg-paper);
-      border-radius: 8px;
-      padding: 16px;
-      width: 240px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-
-    .save-dialog h3 {
-      font-size: 14px;
-      margin-bottom: 10px;
-    }
-
-    .save-dialog label {
-      font-size: 12px;
-      color: var(--text-secondary);
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .save-dialog select,
-    .save-dialog input[type="text"] {
-      width: 100%;
-      padding: 6px 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      font-size: 12px;
-      margin-bottom: 10px;
-      background: var(--bg-default);
-      color: var(--text-primary);
-    }
-
-    .save-dialog-buttons {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-    }
-
-    .save-dialog-buttons button {
-      padding: 6px 14px;
-      border: none;
-      border-radius: 4px;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
-    .save-dialog-buttons .cancel {
-      background: var(--bg-subtle);
-      color: var(--text-primary);
-    }
-
-    .save-dialog-buttons .confirm {
-      background: var(--accent-success);
-      color: white;
-    }
-  </style>
+  <link rel="stylesheet" href="/src/menu/main.css">
 </head>
 <body>
   <div class="container">
@@ -359,8 +13,9 @@
     <div class="header-row">
       <span class="header-title">Aurora</span>
       <div class="header-toggle">
-        <span class="toggle-label">Enabled</span>
-        <div class="toggle-switch" id="masterToggle">
+        <span class="toggle-label" id="toggleLabel">Enabled</span>
+        <div class="toggle-switch" id="masterToggle"
+             role="switch" aria-checked="false" aria-labelledby="toggleLabel">
           <div class="toggle-slider"></div>
         </div>
       </div>
@@ -368,7 +23,7 @@
 
     <!-- 2. Preset Load / Save -->
     <div class="preset-section">
-      <select id="presetSelect" class="preset-select">
+      <select id="presetSelect" class="preset-select" aria-label="Load preset">
         <option value="" disabled selected>Load Preset...</option>
       </select>
       <button class="preset-btn save" id="savePresetBtn">Save Current As...</button>
@@ -379,18 +34,20 @@
 
     <div class="slider-group">
       <div class="slider-label">
-        <span>Saturation</span>
+        <span id="satLabel">Saturation</span>
         <span class="slider-value" id="satValue">100%</span>
       </div>
-      <input type="range" id="satSlider" min="0" max="200" value="100">
+      <input type="range" id="satSlider" min="0" max="200" value="100"
+             aria-labelledby="satLabel" aria-valuetext="100%">
     </div>
 
     <div class="slider-group">
       <div class="slider-label">
-        <span>Lightness</span>
+        <span id="lightLabel">Lightness</span>
         <span class="slider-value" id="lightValue">100%</span>
       </div>
-      <input type="range" id="lightSlider" min="0" max="200" value="100">
+      <input type="range" id="lightSlider" min="0" max="200" value="100"
+             aria-labelledby="lightLabel" aria-valuetext="100%">
     </div>
 
     <!-- 4. Tint Overlay: Hue, Opacity, Blend Mode -->
@@ -398,18 +55,20 @@
 
     <div class="slider-group">
       <div class="slider-label">
-        <span>Hue</span>
+        <span id="hueLabel">Hue</span>
         <span class="slider-value" id="hueValue">0°</span>
       </div>
-      <input type="range" id="hueSlider" min="-180" max="180" value="0">
+      <input type="range" id="hueSlider" min="-180" max="180" value="0"
+             aria-labelledby="hueLabel" aria-valuetext="0°">
     </div>
 
     <div class="slider-group">
       <div class="slider-label">
-        <span>Opacity</span>
+        <span id="opacityLabel">Opacity</span>
         <span class="slider-value" id="opacityValue">0%</span>
       </div>
-      <input type="range" id="opacitySlider" min="0" max="100" value="0">
+      <input type="range" id="opacitySlider" min="0" max="100" value="0"
+             aria-labelledby="opacityLabel" aria-valuetext="0%">
     </div>
 
     <!-- Blend mode: hidden from UI but functional in code.
@@ -419,7 +78,7 @@
       <div class="blend-label">
         <span>Blend Mode</span>
       </div>
-      <select id="blendSelect" class="blend-select">
+      <select id="blendSelect" class="blend-select" aria-label="Blend mode">
       </select>
     </div>
 
@@ -430,12 +89,13 @@
       <div class="feather-row">
         <div class="feather-slider-wrap">
           <div class="slider-label">
-            <span>Feather</span>
+            <span id="featherLabel">Feather</span>
             <span class="slider-value" id="featherValue">0%</span>
           </div>
-          <input type="range" id="featherSlider" min="0" max="100" value="0">
+          <input type="range" id="featherSlider" min="0" max="100" value="0"
+                 aria-labelledby="featherLabel" aria-valuetext="0%">
         </div>
-        <button class="invert-btn" id="invertBtn">Invert</button>
+        <button class="invert-btn" id="invertBtn" aria-pressed="false">Invert</button>
       </div>
     </div>
 
@@ -447,16 +107,17 @@
         <span id="dreamyLabel">&#8212;</span>
         <span class="slider-value" id="dreamyValue">0</span>
       </div>
-      <input type="range" id="dreamySlider" min="-100" max="100" value="0">
+      <input type="range" id="dreamySlider" min="-100" max="100" value="0"
+             aria-labelledby="dreamyLabel" aria-valuetext="0">
     </div>
 
     <!-- 7. Divider -->
     <div class="divider"></div>
 
-    <!-- 7. Reset / Remove -->
+    <!-- 8. Reset / Remove -->
     <div class="action-row">
       <button class="reset-btn" id="resetBtn">Reset</button>
-      <button class="remove-btn" id="removeBtn">Remove</button>
+      <button class="remove-btn" id="removeBtn">Remove Aurora</button>
     </div>
   </div>
 

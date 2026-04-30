@@ -22,6 +22,7 @@ import {
 import { loadPresets, savePresets, clearPresetSlot, getPresetsKey } from "./shared/presets";
 import { CONFIG_KEY } from "./shared/keys";
 import { applyTheme } from "./shared/theme";
+import { changelog, getUnseenEntries } from "./changelog";
 
 /** Dimensions of the action popover (pixels) */
 const POPOVER_WIDTH = 350;
@@ -140,20 +141,26 @@ function loadUIState(): UIState | null {
 function applyCollapsedStates(): void {
   const helpBody = document.getElementById("helpBody");
   const helpChevron = document.getElementById("helpChevron");
+  const helpHeader = document.getElementById("helpHeader");
   if (helpBody) helpBody.style.display = helpCollapsed ? "none" : "";
   if (helpChevron) helpChevron.classList.toggle("collapsed", helpCollapsed);
+  if (helpHeader) helpHeader.setAttribute("aria-expanded", String(!helpCollapsed));
 
   const presetsBody = document.getElementById("presetsBody");
   const presetsActions = document.getElementById("presetsActions");
   const presetsChevron = document.getElementById("presetsChevron");
+  const presetsHeader = document.getElementById("presetsHeader");
   if (presetsBody) presetsBody.style.display = presetsCollapsed ? "none" : "";
   if (presetsActions) presetsActions.style.display = (presetsCollapsed || !isGM) ? "none" : "";
   if (presetsChevron) presetsChevron.classList.toggle("collapsed", presetsCollapsed);
+  if (presetsHeader) presetsHeader.setAttribute("aria-expanded", String(!presetsCollapsed));
 
   const itemsBody = document.getElementById("sceneItemsBody");
   const itemsChevron = document.getElementById("sceneItemsChevron");
+  const itemsHeader = document.getElementById("sceneItemsHeader");
   if (itemsBody) itemsBody.style.display = itemsCollapsed ? "none" : "";
   if (itemsChevron) itemsChevron.classList.toggle("collapsed", itemsCollapsed);
+  if (itemsHeader) itemsHeader.setAttribute("aria-expanded", String(!itemsCollapsed));
 }
 
 // ── DOM refs ──────────────────────────────────────────────────────
@@ -173,7 +180,9 @@ function setMode(mode: "rename" | "clear" | null) {
 
   // Update button active states
   renameModeBtn.classList.toggle("active", activeMode === "rename");
+  renameModeBtn.setAttribute("aria-pressed", String(activeMode === "rename"));
   clearModeBtn.classList.toggle("active", activeMode === "clear");
+  clearModeBtn.setAttribute("aria-pressed", String(activeMode === "clear"));
 
   // Re-render presets with highlight states
   renderPresets();
@@ -291,8 +300,12 @@ function showRenameDialog(index: number) {
 
   const dialog = document.createElement("div");
   dialog.className = "rename-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "rename-dialog-heading");
 
   const heading = document.createElement("h3");
+  heading.id = "rename-dialog-heading";
   heading.textContent = "Rename Preset";
   dialog.appendChild(heading);
 
@@ -486,6 +499,9 @@ function renderSceneItems(): void {
     const toggle = document.createElement("div");
     toggle.className = "scene-item-toggle" + (data.enabled ? " active" : "");
     toggle.title = data.enabled ? "Disable effect" : "Enable effect";
+    toggle.setAttribute("role", "switch");
+    toggle.setAttribute("aria-checked", String(data.enabled));
+    toggle.setAttribute("aria-label", data.enabled ? "Disable Aurora effect" : "Enable Aurora effect");
     const slider = document.createElement("div");
     slider.className = "scene-item-toggle-slider";
     toggle.appendChild(slider);
@@ -631,6 +647,23 @@ OBR.onReady(async () => {
   }
 
   if (isGM) {
+    // What's New modal — shown once per version on first open after an update
+    const WHATS_NEW_KEY = "aurora:lastSeenVersion";
+    const lastSeen = localStorage.getItem(WHATS_NEW_KEY);
+    if (!lastSeen) {
+      // First-time user: record current version so future updates trigger the modal
+      if (changelog.length > 0) localStorage.setItem(WHATS_NEW_KEY, changelog[0].version);
+    } else if (getUnseenEntries(changelog, lastSeen).length > 0) {
+      OBR.modal.open({
+        id: "dev.aurora.whats-new",
+        url: `/whats-new.html?lastSeen=${encodeURIComponent(lastSeen)}`,
+        width: 340,
+        height: 320,
+      }).then(() => {
+        if (changelog.length > 0) localStorage.setItem(WHATS_NEW_KEY, changelog[0].version);
+      }).catch(() => { /* modal already open or OBR unavailable */ });
+    }
+
     // Collapse/expand toggle on section header click
     document.getElementById("sceneItemsHeader")?.addEventListener("click", () => {
       itemsCollapsed = !itemsCollapsed;

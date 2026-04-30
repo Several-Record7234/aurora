@@ -14,6 +14,7 @@ import OBR from "@owlbear-rodeo/sdk";
 import { createAuroraMenu } from "./createAuroraMenu";
 import { startEffectManager } from "./effectManager";
 import { migrateMetadata, migrateItemMetadata } from "./migrateMetadata";
+import { changelog, getUnseenEntries } from "../changelog";
 
 const OBR_TIMEOUT_MS = 10_000;
 const obrTimeout = setTimeout(() => {
@@ -28,6 +29,31 @@ OBR.onReady(async () => {
 
   createAuroraMenu();
   const cleanupEffectManager = startEffectManager();
+
+  // What's New modal (GM only, fires once per new version)
+  try {
+    const role = await OBR.player.getRole();
+    if (role === "GM") {
+      const lastSeen = localStorage.getItem("aurora:lastSeenVersion");
+      if (!lastSeen) {
+        if (changelog.length > 0) localStorage.setItem("aurora:lastSeenVersion", changelog[0].version);
+      } else {
+        const unseen = getUnseenEntries(changelog, lastSeen);
+        if (unseen.length > 0) {
+          OBR.modal.open({
+            id: "dev.aurora.whats-new",
+            url: `/whats-new.html?lastSeen=${encodeURIComponent(lastSeen)}`,
+            width: 360,
+            height: 480,
+          }).then(() => {
+            if (changelog.length > 0) localStorage.setItem("aurora:lastSeenVersion", changelog[0].version);
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch {
+    // OBR not ready or role unavailable — skip
+  }
 
   // Also migrate item metadata when the user switches to a different scene.
   // REMOVABLE: see migrateMetadata.ts header comment.

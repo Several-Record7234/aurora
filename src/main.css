@@ -1,0 +1,491 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding: 16px;
+  background: var(--bg-default);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ──────────────────────────── */
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--bg-paper);
+  border-radius: 8px;
+  margin-bottom: 11px;
+  box-shadow: var(--shadow);
+  flex-shrink: 0;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+}
+
+.header-icon-bg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  margin-right: 6px;
+  background: #1e2231;
+  border-radius: 25%;
+}
+
+.header-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.header-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+
+.header-link:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.header-link svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.header-link:hover svg {
+  opacity: 0.9;
+}
+
+/* ── Shared Collapsible Chevron ──────── */
+
+.section-chevron {
+  font-size: 10px;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.section-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* ── Help Section ────────────────────── */
+
+.help-section {
+  background: var(--bg-paper);
+  border-radius: 8px;
+  margin-bottom: 11px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.help-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
+  gap: 8px;
+}
+
+.help-header:hover {
+  background: var(--bg-subtle);
+}
+
+.help-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.help-body {
+  padding: 0 16px 14px;
+}
+
+.help-body p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.help-body p:last-child {
+  margin-bottom: 0;
+}
+
+.help-body strong {
+  color: var(--text-primary);
+}
+
+/* ── Presets Section ─────────────────── */
+
+.presets-section {
+  background: var(--bg-paper);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.presets-header-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
+  gap: 8px;
+}
+
+.presets-header-row:hover {
+  background: var(--bg-subtle);
+}
+
+.presets-body {
+  padding: 0 16px 16px;
+}
+
+.presets-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.presets-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action-btn {
+  background: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 5px 12px;
+  border-radius: 6px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.action-btn.rename {
+  color: var(--accent-primary);
+  border: 2px solid var(--accent-primary);
+}
+
+.action-btn.rename:hover {
+  background: var(--accent-primary-subtle);
+}
+
+.action-btn.rename.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.action-btn.clear {
+  color: var(--accent-danger);
+  border: 2px solid var(--accent-danger);
+}
+
+.action-btn.clear:hover {
+  background: var(--accent-danger-subtle);
+}
+
+.action-btn.clear.active {
+  background: var(--accent-danger);
+  color: white;
+}
+
+/* ── Preset Grid ─────────────────────── */
+
+#presetsList {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.preset-item {
+  padding: 10px 12px;
+  background: var(--preset-tint, var(--bg-subtle));
+  border-radius: 6px;
+  cursor: default;
+  border: 2px solid var(--border-color);
+  min-width: 0;
+  transition: border-color 0.2s;
+  user-select: none;
+}
+
+.preset-item.empty {
+  opacity: 0.5;
+}
+
+.preset-item.highlight-rename {
+  border-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.preset-item.highlight-rename:hover {
+  background: var(--accent-primary-light);
+}
+
+.preset-item.highlight-clear {
+  border-color: var(--accent-danger);
+  cursor: pointer;
+}
+
+.preset-item.highlight-clear:hover {
+  background: var(--accent-danger-light);
+}
+
+.preset-name {
+  font-size: 13px;
+  color: var(--preset-text-primary, var(--text-primary));
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preset-values {
+  font-size: 11px;
+  color: var(--preset-text-secondary, var(--text-secondary));
+  margin-top: 4px;
+  overflow-wrap: break-word;
+}
+
+/* ── Rename Dialog ───────────────────── */
+
+.rename-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.rename-dialog {
+  background: var(--bg-paper);
+  border-radius: 8px;
+  padding: 16px;
+  width: 220px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.rename-dialog h3 {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.rename-dialog input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  margin-bottom: 10px;
+  background: var(--bg-default);
+  color: var(--text-primary);
+}
+
+.rename-dialog-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.rename-dialog-buttons button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rename-dialog-buttons .cancel {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.rename-dialog-buttons .confirm {
+  background: var(--accent-primary);
+  color: white;
+}
+
+/* ── Scene Items Section ─────────────────── */
+
+.scene-items-section {
+  background: var(--bg-paper);
+  border-radius: 8px;
+  margin-top: 11px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.scene-items-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
+  gap: 8px;
+}
+
+.scene-items-header:hover {
+  background: var(--bg-subtle);
+}
+
+.scene-items-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.scene-items-count {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.scene-items-body {
+  border-top: 1px solid var(--border-color);
+  padding: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.scene-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.scene-item-row:hover {
+  background: var(--bg-subtle);
+}
+
+.scene-item-row:active {
+  background: var(--border-color);
+}
+
+.scene-item-thumb {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.scene-item-thumb img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  display: block;
+}
+
+.scene-item-thumb svg {
+  width: 20px;
+  height: 20px;
+  opacity: 0.7;
+}
+
+.scene-item-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scene-item-toggle {
+  flex-shrink: 0;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background: var(--border-color);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.scene-item-toggle.active {
+  background: var(--accent-success);
+}
+
+.scene-item-toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.scene-item-toggle.active .scene-item-toggle-slider {
+  transform: translateX(14px);
+}
+
+.scene-item-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-style: italic;
+}
