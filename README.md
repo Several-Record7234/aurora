@@ -63,7 +63,9 @@ The **Crisp ↔ Dreamy** slider adds a second layer of atmosphere on top of your
 
 Aurora analyses the actual brightness distribution of your map and calibrates the bloom threshold automatically, so the glow concentrates on the genuinely bright areas of your scene rather than washing everything out uniformly.
 
-> ![public\images\Aurora 9 - Crisp Dreamy slider.gif](https://github.com/user-attachments/assets/PLACEHOLDER)
+> ![public\images\Aurora 9 - Dreamy slider.gif](https://github.com/user-attachments/assets/69db6949-f6b3-4c6e-9f2b-010539796ba5)
+> ![public\images\Aurora 10 - Crisp slider.gif](https://github.com/user-attachments/assets/6b48c84c-9c14-42b7-a54c-4568f3bec676)
+
 
 **💡 Pro tip:** Having a map item with a particular effect applied and then layering one or more smaller shaders (with the same effect) on top of it will allow you to have some cool gradient cut-outs, where the smaller shapes use the Feather parameter (and the Invert state if needed) to allow smooth transitions from 0%-effect areas to 100%-effect areas - these smaller items can then be attached to tokens so that they follow movement around the map.
 
