@@ -646,22 +646,32 @@ OBR.onReady(async () => {
       : POPOVER_HEIGHT - SCENE_ITEMS_SECTION_HEIGHT - HELP_SECTION_HEIGHT);
   }
 
+  // What's New modal helpers — available to all users (link) and GMs (auto-trigger)
+  const WHATS_NEW_KEY = "aurora:lastSeenVersion";
+
+  function openWhatsNewModal(lastSeen: string): void {
+    OBR.modal.open({
+      id: "dev.aurora.whats-new",
+      url: `/whats-new.html?lastSeen=${encodeURIComponent(lastSeen)}`,
+      width: 340,
+      height: 320,
+    }).then(() => {
+      if (changelog.length > 0) localStorage.setItem(WHATS_NEW_KEY, changelog[0].version);
+    }).catch(() => { /* modal already open or OBR unavailable */ });
+  }
+
+  document.getElementById("whatsNewLink")?.addEventListener("click", () => {
+    openWhatsNewModal("0.0.0");
+  });
+
   if (isGM) {
-    // What's New modal — shown once per version on first open after an update
-    const WHATS_NEW_KEY = "aurora:lastSeenVersion";
+    // Auto-trigger: show once per version on first GM open after an update
     const lastSeen = localStorage.getItem(WHATS_NEW_KEY);
     if (!lastSeen) {
       // First-time user: record current version so future updates trigger the modal
       if (changelog.length > 0) localStorage.setItem(WHATS_NEW_KEY, changelog[0].version);
     } else if (getUnseenEntries(changelog, lastSeen).length > 0) {
-      OBR.modal.open({
-        id: "dev.aurora.whats-new",
-        url: `/whats-new.html?lastSeen=${encodeURIComponent(lastSeen)}`,
-        width: 340,
-        height: 320,
-      }).then(() => {
-        if (changelog.length > 0) localStorage.setItem(WHATS_NEW_KEY, changelog[0].version);
-      }).catch(() => { /* modal already open or OBR unavailable */ });
+      openWhatsNewModal(lastSeen);
     }
 
     // Collapse/expand toggle on section header click

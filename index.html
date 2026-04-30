@@ -29,24 +29,25 @@
     <div class="help-section">
       <div class="help-header" id="helpHeader"
            aria-expanded="true" aria-controls="helpBody">
-        <span class="help-title">How to Use</span>
         <span class="section-chevron" id="helpChevron">▼</span>
+        <span class="help-title">How to Use</span>
       </div>
       <div class="help-body" id="helpBody">
         <p>Select and right-click any item on the <strong>Map layer</strong> and select <strong>Add Aurora</strong> to apply colour grading. Use <strong>Aurora Settings</strong> on the same contextual menu to adjust.</p>
         <p>You can view, <strong>Rename</strong>, or <strong>Clear</strong> your saved presets below. Presets are shared across all Scenes in this Room.</p>
+        <p><button type="button" id="whatsNewLink" class="whats-new-link">What's New</button></p>
       </div>
     </div>
 
     <div class="presets-section">
       <div class="presets-header-row" id="presetsHeader"
            aria-expanded="true" aria-controls="presetsBody">
+        <span class="section-chevron" id="presetsChevron">▼</span>
         <span class="presets-title">Preset Library</span>
         <span class="presets-actions" id="presetsActions">
           <button class="action-btn rename" id="renameModeBtn" aria-pressed="false">Rename</button>
           <button class="action-btn clear" id="clearModeBtn" aria-pressed="false">Clear</button>
         </span>
-        <span class="section-chevron" id="presetsChevron">▼</span>
       </div>
       <div class="presets-body" id="presetsBody">
         <div id="presetsList">
@@ -59,9 +60,9 @@
     <div class="scene-items-section" id="sceneItemsSection" style="display: none;">
       <div class="scene-items-header" id="sceneItemsHeader"
            aria-expanded="false" aria-controls="sceneItemsBody">
+        <span class="section-chevron collapsed" id="sceneItemsChevron">▼</span>
         <span class="scene-items-title">Scene Items</span>
         <span class="scene-items-count" id="sceneItemsCount">0</span>
-        <span class="section-chevron collapsed" id="sceneItemsChevron">▼</span>
       </div>
       <div class="scene-items-body" id="sceneItemsBody" style="display: none;">
         <div id="sceneItemsList">

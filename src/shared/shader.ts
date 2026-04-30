@@ -340,12 +340,16 @@ export function getShaderCode(): string {
         vec3 blurred = computeBlur(uv);
 
         // computeBlur samples scene.eval() — the raw scene — not the post-HSLO
-        // signal. Apply the same saturation transform that was applied to graded
-        // so both sides of the bloom/unsharp arithmetic stay in the same colour
-        // space. Without this, at low saturation blurred retains the original
-        // scene colours and causes colour bleed when mixed with a near-grey graded.
+        // signal. Apply the same saturation and lightness transforms that were
+        // applied to graded so both sides of the bloom/unsharp arithmetic stay
+        // in the same colour space.
+        // Without saturation: low-saturation scenes bleed colour into bloom/unsharp.
+        // Without lightness: darkened scenes (l<100) get disproportionate bloom
+        // (blurred is brighter than graded) and excessive unsharp darkening
+        // (graded-blurred is more negative than expected).
         float blurLuma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
         blurred = mix(vec3(blurLuma), blurred, saturation);
+        blurred = clamp(blurred * lightness, 0.0, 1.0);
 
         if (dreamy > 0.0) {
           // Bloom path: extract bright regions of the blur and add back at
