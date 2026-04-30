@@ -2,12 +2,13 @@
 
 **Aurora** lets you transform the mood of your maps with real-time 'colour grading' - right inside Owlbear Rodeo. Desaturate a forest glade into gloomy shadow, bathe a tavern in golden-hour warmth, or wash a battlefield in eerie moonlight. It's all done with a GPU shader that runs directly on your map, so there's no image editing, no re-uploading, and changes can be seen instantly.
 
-Aurora gives you four intuitive controls:
+Aurora gives you five intuitive controls:
 
 - **Saturation**: boost or drain the colour intensity of your map
 - **Lightness**: brighten a sun-drenched scene or darken a cave
 - **Hue**: overlay a colour tint (red for a burning city, blue for an underwater temple…)
 - **Opacity**: control how strong that tint is, from a subtle wash to a bold colour shift
+- **Crisp ↔ Dreamy**: sharpen your map for high-detail tactical scenes, or add a soft bloom glow for an ethereal, painterly atmosphere
 
 Mix and match these parameters to create exactly the atmosphere you're after, then save your favourites as presets that persist across every Scene in the Room.
 
@@ -27,14 +28,14 @@ https://aurora-0nm6.onrender.com/manifest.json
 
 Then head to your **Owlbear Rodeo Room** → **Extras** → **Extensions** → **+** (Add Custom Extension), paste the URL, and confirm.
 
-> ![Adding the manifest URL in the Room's Extension Manager](https://github.com/user-attachments/assets/da84526c-9165-40fb-a0cc-3658e16c18ba)
+> ![public\images\Aurora 1 - add extension.gif](https://github.com/user-attachments/assets/da84526c-9165-40fb-a0cc-3658e16c18ba)
 
 
 ### 2. Enable Aurora In Your Room
 
 In the **Extensions Manager** popover, make sure Aurora is **toggled on** for this Room. You should see the <img src="public/icon.png" width="20" height="20"> Aurora icon appear in the top-left extension Action tray.
 
-> ![Enabling Aurora in the Room's Extension Manager](https://github.com/user-attachments/assets/3ab78945-d55c-4f31-b083-75f638c072b8)
+> ![public\images\Aurora 2 - enable extension.gif](https://github.com/user-attachments/assets/3ab78945-d55c-4f31-b083-75f638c072b8)
 
 ---
 
@@ -44,7 +45,7 @@ In the **Extensions Manager** popover, make sure Aurora is **toggled on** for th
 
 Select and right-click any item on the **Map layer** and choose **Add Aurora** from the context menu. That's it — the shader is now attached and ready to configure!
 
-> <img width="1377" height="637" alt="image" src="https://github.com/user-attachments/assets/37071643-45f5-4fef-84db-4abf641d46fd" />
+> ![public\images\Context - Add Aurora.png](https://github.com/user-attachments/assets/37071643-45f5-4fef-84db-4abf641d46fd)
 
 **💡 Pro tip:** Want to affect multiple maps with a single effect? Draw a large rectangle on the **Drawing** layer, move it to the **Map** layer, then **Add Aurora** to that rectangle. The shader covers the full area of whatever item it's attached to, so one big shape can mood-change your entire Scene in one go.
 
@@ -52,11 +53,17 @@ Select and right-click any item on the **Map layer** and choose **Add Aurora** f
 
 After adding Aurora, right-click the same item again and choose **Aurora Settings**. This opens the control panel where you can tweak all four **Saturation**, **Lightness**, **Hue**, and **Opacity** sliders and preview their changes, and those parameters are set for everyone soon as you release them.
 
-> ![The Aurora Settings popover with sliders](https://github.com/user-attachments/assets/d6cc379a-695f-487c-a0d2-19b682496ef3)
+> ![public\images\Aurora 3 - Aurora Settings.gif](https://github.com/user-attachments/assets/d6cc379a-695f-487c-a0d2-19b682496ef3)
 
 There are also controls here for gradient effects, with a **Feather** percentage slider that adjusts how much of the shape is covered in a smooth gradient of the effect, and an **Invert** button that flips the direction of the 
 
-> ![Feather gradient and Invert](https://github.com/user-attachments/assets/374c512a-e57a-42c1-a031-6991a91f3ecd)
+> ![public\images\Aurora 4 - Feather slider.gif](https://github.com/user-attachments/assets/374c512a-e57a-42c1-a031-6991a91f3ecd)
+
+The **Crisp ↔ Dreamy** slider adds a second layer of atmosphere on top of your colour grading. Drag it left towards **Crisp** for an unsharp mask effect that tightens edges and snaps your map into sharper focus — ideal for clinical, high-detail environments like forges, libraries, or tactical battle grids. Drag it right towards **Dreamy** to add a soft bloom glow that makes bright areas bleed light into their surroundings, giving your scene a painterly, ethereal quality that suits moonlit glades, candlelit crypts, or any moment you want to feel a little magical.
+
+Aurora analyses the actual brightness distribution of your map and calibrates the bloom threshold automatically, so the glow concentrates on the genuinely bright areas of your scene rather than washing everything out uniformly.
+
+> ![public\images\Aurora 9 - Crisp Dreamy slider.gif](https://github.com/user-attachments/assets/PLACEHOLDER)
 
 **💡 Pro tip:** Having a map item with a particular effect applied and then layering one or more smaller shaders (with the same effect) on top of it will allow you to have some cool gradient cut-outs, where the smaller shapes use the Feather parameter (and the Invert state if needed) to allow smooth transitions from 0%-effect areas to 100%-effect areas - these smaller items can then be attached to tokens so that they follow movement around the map.
 
@@ -81,13 +88,12 @@ These can be recalled and then overwritten with your own remixes of them, plus t
 
 In the **Aurora Settings** popover, use the **Load Preset…** dropdown to pick any saved preset. The sliders snap to those values instantly - it's a great way to audition different moods or use a preset as a starting point before fine-tuning.
 
-> ![Load Preset from the dropdown](https://github.com/user-attachments/assets/bfd89d3a-12a9-4280-b497-acdee3da40ac)
+> ![public\images\Aurora 5 - apply Preset.gif](https://github.com/user-attachments/assets/bfd89d3a-12a9-4280-b497-acdee3da40ac)
 
 ### 6. Toggle The Effect On And Off
 
 Use the **Enabled** toggle at the top of the Aurora Settings panel to flip the shader on and off without losing your slider positions. This is really handy for comparing the "before and after" (toggle it a few times and you'll immediately see how much atmosphere the effect adds) or for sudden and dramatic mood shifts as you switch the shader right before your players' eyes!
 
-> ![Screenshot or short recording placeholder: Toggling the effect on and off to compare]
 
 ### 7. Save Your Own Presets
 
@@ -99,7 +105,7 @@ Happy with your settings? Hit **Save Current As…** to store them. You can:
 
 Presets are compacted and stored in the **Room metadata**, so they're shared with every player in the Room and they persist across sessions and Scene changes. A map-layer object that has an Aurora effect attached will save its parameters in its own metadata.
 
-> ![Save Current As... with slot selection and name input](https://github.com/user-attachments/assets/9bfffb5d-6bd9-4e40-bf88-53af1e60f640)
+> ![public\images\Aurora 6 - save Preset.gif](https://github.com/user-attachments/assets/9bfffb5d-6bd9-4e40-bf88-53af1e60f640)
 
 ---
 
@@ -111,7 +117,7 @@ Click the **<img src="public/icon.png" width="20" height="20"> Aurora** icon in 
 
 From here you can get an overview of everything you've saved, and manage your library without needing to have a map item selected.
 
-> <img width="351" height="687" alt="image" src="https://github.com/user-attachments/assets/5ae47afa-164d-4605-8da5-14c4792f772b" />
+> ![public\images\Aurora Action popover.png](https://github.com/user-attachments/assets/5ae47afa-164d-4605-8da5-14c4792f772b)
 
 
 ### 9. Rename Or Clear Presets *GM-only feature*
@@ -123,7 +129,7 @@ At the top of the Preset Library you'll find two mode buttons:
 
 Both modes highlight the valid targets so you know exactly what you're clicking. Click the same mode button again (or complete the action) to exit the mode.
 
-> ![Rename mode highlights presets in blue](https://github.com/user-attachments/assets/8dd80c9c-b90e-4494-8caf-0857bbfe7634)
+> ![public\images\Aurora 7 - Rename Preset.gif](https://github.com/user-attachments/assets/8dd80c9c-b90e-4494-8caf-0857bbfe7634)
 
 ---
 
@@ -137,7 +143,7 @@ If you want to remove the shader entirely then you can use the red **Remove** bu
 
 If you just want to temporarily turn the effect off while keeping your slider values intact, use the **Enabled** toggle instead - that way your settings are still there when you switch it back on and you don't need to worry about whether this item is in the Map layer.
 
-> ![The Reset and Remove buttons at the bottom of the settings panel](https://github.com/user-attachments/assets/4a0dd172-0cf6-48ec-a268-74756392e482)
+> ![public\images\Aurora 8 - Reset shader.gif](https://github.com/user-attachments/assets/4a0dd172-0cf6-48ec-a268-74756392e482)
 
 ---
 ## Managing Aurora Effects In-Game
@@ -146,7 +152,7 @@ If you just want to temporarily turn the effect off while keeping your slider va
 
 In the Action popover, you'll see a section called **Scene Items**, which lists every item that currently has an Aurora effect attached to it, even if that effect is not changing the item's appearance (ie. it's 'zeroed out' and/or currently disabled).
 
-<img width="353" height="682" alt="image" src="https://github.com/user-attachments/assets/efd3d6f6-af67-4ce0-82f8-5fce618931da" />
+![public\images\Popover - Scene Items.png](https://github.com/user-attachments/assets/efd3d6f6-af67-4ce0-82f8-5fce618931da)
 
 Within this list you can see a thumbnail of each item, its Accessibility name, and its disabled/enabled state. Clicking on the thumbnail or the name will select that item in the Scene, and double-clicking on either of these will select the item and will also move your viewport to make it centred and full-screen.
 
