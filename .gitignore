@@ -28,6 +28,9 @@ pnpm-debug.log*
 # README help media
 /media/
 
+# Generated help page
+/public/help.html
+
 # OS files
 .DS_Store
 Thumbs.db

@@ -653,14 +653,15 @@ OBR.onReady(async () => {
     OBR.modal.open({
       id: "dev.aurora.whats-new",
       url: `/whats-new.html?lastSeen=${encodeURIComponent(lastSeen)}`,
-      width: 340,
-      height: 320,
+      width: 360,
+      height: 480,
     }).then(() => {
       if (changelog.length > 0) localStorage.setItem(WHATS_NEW_KEY, changelog[0].version);
     }).catch(() => { /* modal already open or OBR unavailable */ });
   }
 
-  document.getElementById("whatsNewLink")?.addEventListener("click", () => {
+  document.getElementById("whatsNewLink")?.addEventListener("click", (e) => {
+    e.stopPropagation();
     openWhatsNewModal("0.0.0");
   });
 

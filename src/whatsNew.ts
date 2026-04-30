@@ -44,14 +44,14 @@ function render(entries: ReturnType<typeof getUnseenEntries>, remaining: number 
       return `
         <li style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;">
           <span style="flex-shrink:0;padding:0 4px;border-radius:3px;font-size:10px;font-weight:500;line-height:16px;background:${m.bg};color:${m.color};">${m.label}</span>
-          <span style="font-size:11px;color:${COLORS.subtext};">${parseMd(c.text)}</span>
+          <span style="font-size:12px;color:${COLORS.subtext};">${parseMd(c.text)}</span>
         </li>`;
     }).join("");
     return `
       <div style="margin-bottom:12px;">
         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">
-          <span style="font-size:11px;font-weight:600;color:${COLORS.text};">v${e.version}</span>
-          <span style="font-size:11px;color:${COLORS.subtext};">${e.date}</span>
+          <span style="font-size:12px;font-weight:600;color:${COLORS.text};">v${e.version}</span>
+          <span style="font-size:12px;color:${COLORS.subtext};">${e.date}</span>
         </div>
         <ul style="list-style:none;margin:0;padding:0;">${items}</ul>
       </div>`;
@@ -60,16 +60,16 @@ function render(entries: ReturnType<typeof getUnseenEntries>, remaining: number 
   const btnLabel = remaining !== null ? `Got it (${remaining}s)` : "Got it";
 
   return `
-    <div id="app" style="display:flex;flex-direction:column;height:100%;background:${COLORS.base};color:${COLORS.text};padding:16px;gap:12px;font-family:${FONT};box-sizing:border-box;">
+    <div id="app" style="position:fixed;inset:0;display:flex;flex-direction:column;background:${COLORS.base};color:${COLORS.text};padding:16px;gap:12px;font-family:${FONT};box-sizing:border-box;">
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <img src="/icon.svg" alt="" style="width:24px;height:24px;border-radius:4px;" />
-        <span style="font-size:13px;font-weight:600;">Aurora</span>
-        <span style="font-size:11px;color:${COLORS.subtext};margin-left:auto;">What's New</span>
+        <img src="/icon.png" alt="" style="width:24px;height:24px;border-radius:4px;" />
+        <span style="font-size:14px;font-weight:600;">Aurora</span>
+        <span style="font-size:12px;color:${COLORS.subtext};margin-left:auto;">What's New</span>
       </div>
       <div style="border-top:1px solid ${COLORS.surface};flex-shrink:0;"></div>
-      <div id="scroll" style="flex:1;overflow-y:auto;min-height:0;">${body}</div>
+      <div id="scroll" style="flex:1;overflow-y:scroll;min-height:0;">${body}</div>
       <div style="border-top:1px solid ${COLORS.surface};flex-shrink:0;"></div>
-      <button id="close-btn" style="width:100%;padding:6px 12px;border-radius:4px;border:none;font-size:11px;font-weight:500;cursor:pointer;flex-shrink:0;background:${COLORS.accent};color:${COLORS.base};">${btnLabel}</button>
+      <button id="close-btn" style="width:100%;padding:6px 12px;border-radius:4px;border:none;font-size:12px;font-weight:500;cursor:pointer;flex-shrink:0;background:${COLORS.accent};color:${COLORS.base};">${btnLabel}</button>
     </div>`;
 }
 

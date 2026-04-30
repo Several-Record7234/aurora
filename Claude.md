@@ -34,7 +34,7 @@ Available at `../owlbear-rodeo-extensions-SKILL.md`
 
 ## Known Shader Behaviours
 
-- **Blur samples raw scene, not post-HSLO signal**: `computeBlur` calls `scene.eval()` which returns original scene colours before any grading. The dreamy/crisp block corrects for this by applying the same saturation transform to `blurred` before use (`mix(vec3(blurLuma), blurred, saturation)`). This keeps bloom and unsharp mask in the same colour space as `graded`. Do not remove this correction — without it, low-saturation scenes bleed colour and high-strength unsharp mask over-saturates.
+- **Blur samples raw scene, not post-HSLO signal**: `computeBlur` calls `scene.eval()` which returns original scene colours before any grading. The dreamy/crisp block corrects for this by applying the same saturation AND lightness transforms to `blurred` before use. Saturation: `mix(vec3(blurLuma), blurred, saturation)`. Lightness: `clamp(blurred * lightness, 0.0, 1.0)`. Both corrections are required — without saturation, low-saturation scenes bleed colour; without lightness, darkened scenes (l<100) get disproportionate bloom (blurred is brighter than graded) and excessive unsharp darkening (graded−blurred is more negative than expected).
 
 ## OBR Image Access (proven facts)
 
