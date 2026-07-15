@@ -78,7 +78,7 @@ OBR.onReady(() => {
   const lastSeen = params.get("lastSeen");
   const entries = getUnseenEntries(changelog, lastSeen);
 
-  document.body.style.cssText = `margin:0;height:100%;overflow:hidden;`;
+  document.body.style.cssText = `margin:0;height:100%;overflow:hidden;font-family:${FONT};`;
   document.body.innerHTML = render(entries, AUTO_CLOSE_S);
 
   let remaining: number | null = AUTO_CLOSE_S;
