@@ -9,7 +9,12 @@
  * so they are visible to all players in the room.
  */
 
-import OBR, { Item, isImage, isShape } from "@owlbear-rodeo/sdk";
+import OBR, { Item, isImage, isShape, isPath } from "@owlbear-rodeo/sdk";
+import type { Curve, Path } from "@owlbear-rodeo/sdk";
+import {
+  extractPathVertices,
+  tessellatePathCurve,
+} from "./background/polygonExtract";
 import {
   Presets,
   isPresets,
@@ -59,9 +64,37 @@ interface SceneItemData {
   id: string;
   label: string;
   enabled: boolean;
-  thumbType: "IMAGE" | "SHAPE" | "OTHER";
+  thumbType: "IMAGE" | "SHAPE" | "POLY" | "OTHER";
   imageUrl?: string;
   shapeType?: string;
+  /** Pre-formatted SVG <polygon> points string ("x1,y1 x2,y2 ..."). */
+  polyPoints?: string;
+}
+
+/**
+ * Map a world-space polygon vertex list to an SVG `points` string fitted to a
+ * `size`×`size` viewport with PADDING px of margin. Cheap enough to recompute
+ * on every item update — no Clipper2, no inradius.
+ */
+function polygonToThumbPoints(verts: { x: number; y: number }[], size: number): string {
+  if (verts.length < 3) return "";
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const v of verts) {
+    if (v.x < minX) minX = v.x;
+    if (v.x > maxX) maxX = v.x;
+    if (v.y < minY) minY = v.y;
+    if (v.y > maxY) maxY = v.y;
+  }
+  const bw = maxX - minX || 1;
+  const bh = maxY - minY || 1;
+  const PAD = size * 0.12;
+  const drawArea = size - PAD * 2;
+  const scale = Math.min(drawArea / bw, drawArea / bh);
+  const ox = PAD + (drawArea - bw * scale) / 2;
+  const oy = PAD + (drawArea - bh * scale) / 2;
+  return verts
+    .map((v) => `${(ox + (v.x - minX) * scale).toFixed(2)},${(oy + (v.y - minY) * scale).toFixed(2)}`)
+    .join(" ");
 }
 
 /** Extract display data (label + thumbnail + enabled state) from an OBR scene item. */
@@ -74,6 +107,17 @@ function extractItemData(item: Item): SceneItemData {
   }
   if (isShape(item)) {
     return { id: item.id, label, enabled, thumbType: "SHAPE", shapeType: item.shapeType };
+  }
+  if (isPath(item)) {
+    const verts = extractPathVertices((item as Path).commands);
+    return { id: item.id, label, enabled, thumbType: "POLY", polyPoints: polygonToThumbPoints(verts, 28) };
+  }
+  if (item.type === "CURVE") {
+    const curve = item as Curve;
+    if (curve.style?.closed === true) {
+      const verts = tessellatePathCurve(curve.points, curve.style?.tension ?? 0);
+      return { id: item.id, label, enabled, thumbType: "POLY", polyPoints: polygonToThumbPoints(verts, 28) };
+    }
   }
   return { id: item.id, label, enabled, thumbType: "OTHER" };
 }
@@ -424,6 +468,14 @@ function buildThumb(data: SceneItemData): HTMLElement {
   svg.setAttribute("stroke-width", "2");
   svg.setAttribute("stroke-linecap", "round");
   svg.setAttribute("stroke-linejoin", "round");
+
+  if (data.thumbType === "POLY" && data.polyPoints) {
+    const el = document.createElementNS(SVG_NS, "polygon");
+    el.setAttribute("points", data.polyPoints);
+    svg.appendChild(el);
+    wrap.appendChild(svg);
+    return wrap;
+  }
 
   if (data.thumbType === "SHAPE") {
     switch (data.shapeType) {

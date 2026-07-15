@@ -41,6 +41,10 @@ export const SHAPE_TYPE_RECT = 0;
 export const SHAPE_TYPE_CIRCLE = 1;
 export const SHAPE_TYPE_TRIANGLE = 2;
 export const SHAPE_TYPE_HEXAGON = 3;
+export const SHAPE_TYPE_POLYGON = 4;
+
+/** Maximum vertex count for polygon host shaders (post-simplification). */
+export const POLYGON_MAX_VERTICES = 24;
 
 export interface ShaderGeometry {
   coordOffset: { x: number; y: number };
@@ -380,4 +384,281 @@ export function getShaderCode(): string {
       return half4(result, color.a);
     }
   `;
+}
+
+// ─── Polygon shader (PATH / CURVE hosts) ────────────────────────────────────
+
+/**
+ * Per-polygon shader inputs. Vertices are baked relative to bounds.center
+ * (i.e. world - bounds.center). The shader evaluates the SDF at
+ * `coord - polyCentre` where polyCentre = bounds.center - parent.position.
+ * This compensates for OBR delivering `coord` in parent-local space
+ * (= world - parent.position), so both freehand PATH/CURVE (parent at origin,
+ * coord ~world scale) and primitive-derived items (parent at bounds.center,
+ * coord ~local scale) end up evaluating against the same small-magnitude
+ * vertex frame.
+ */
+export interface PolygonShaderData {
+  /** Vertices in item-local frame, AABB-centred so |v| stays small for shader
+   *  precision. At most POLYGON_MAX_VERTICES. */
+  vertices: { x: number; y: number }[];
+  /** Largest inscribed circle radius in pixels; used to normalise feather. */
+  inradius: number;
+  /** Item-local AABB centre. Subtracted from `coord` (also item-local) in the
+   *  shader so the SDF eval point lands in the AABB-centred vert frame.
+   *  Rotation-invariant — item-local doesn't change when parent rotates. */
+  polyCentre: { x: number; y: number };
+}
+
+/** Format a JS number as a SkSL float literal with bounded precision. */
+function flit(n: number): string {
+  if (!Number.isFinite(n)) return "0.0";
+  const s = n.toFixed(4);
+  // SkSL float literals must contain a decimal point. `toFixed(4)` always does.
+  return s;
+}
+
+/**
+ * Emit the unrolled IQ exact-polygon SDF: N edge blocks, one per consecutive
+ * vertex pair (j -> i) with j = (i - 1 + N) % N. SkSL forbids array
+ * initializers (see progress.md Q1) so each vertex is a separate
+ * `const vec2 pK` declaration and the loop is fully unrolled.
+ *
+ * The SDF returns: negative inside, positive outside, magnitude = pixel
+ * distance to the nearest polygon edge.
+ */
+function emitPolygonSdf(verts: { x: number; y: number }[]): string {
+  const n = verts.length;
+  const consts: string[] = [];
+  for (let i = 0; i < n; i++) {
+    consts.push(
+      `    const vec2 p${i} = vec2(${flit(verts[i].x)}, ${flit(verts[i].y)});`,
+    );
+  }
+
+  const edgeBlocks: string[] = [];
+  // First iteration of the IQ loop seeds d from p[0]; emit that separately.
+  edgeBlocks.push(`      float d = dot(p - p0, p - p0);`);
+  edgeBlocks.push(`      float s = 1.0;`);
+
+  for (let i = 0; i < n; i++) {
+    const j = (i - 1 + n) % n;
+    edgeBlocks.push(`      {
+        vec2 e = p${j} - p${i};
+        vec2 w = p - p${i};
+        float t = clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        vec2 b = w - e * t;
+        d = min(d, dot(b, b));
+        bvec3 c = bvec3(p.y >= p${i}.y, p.y < p${j}.y, e.x * w.y > e.y * w.x);
+        if (all(c) || all(not(c))) s = -s;
+      }`);
+  }
+
+  return `${consts.join("\n")}
+
+    float sdPolygon(vec2 p) {
+${edgeBlocks.join("\n")}
+      return s * sqrt(d);
+    }`;
+}
+
+/**
+ * Build a complete SkSL shader for a PATH/CURVE polygon host.
+ *
+ * Identical to getShaderCode() except:
+ *   - shapeType, shapeSize, itemSize uniforms are dropped (computeFeather no
+ *     longer needs them).
+ *   - computeFeather is replaced with the polygon SDF version: even at
+ *     feather=0 the polygon interior is hard-masked, so effect colour does
+ *     not bleed outside the polygon into the rectangular ATTACHMENT bounds.
+ *   - Polygon vertices and inradius are baked as SkSL constants (each vertex
+ *     a separate `const vec2 pK` declaration; the SDF loop is unrolled).
+ *
+ * Do not call per-frame. Regenerate only when the host polygon changes;
+ * the resulting string is the `sksl` field passed to buildEffect().
+ */
+export function getPolygonShaderCode(poly: PolygonShaderData): string {
+  if (poly.vertices.length < 3) {
+    throw new Error("getPolygonShaderCode requires at least 3 vertices");
+  }
+  if (poly.vertices.length > POLYGON_MAX_VERTICES) {
+    throw new Error(
+      `getPolygonShaderCode: ${poly.vertices.length} vertices exceeds max ${POLYGON_MAX_VERTICES}`,
+    );
+  }
+
+  const sdfBlock = emitPolygonSdf(poly.vertices);
+  const inradiusLit = flit(Math.max(poly.inradius, 0));
+  const polyCentreLit = `vec2(${flit(poly.polyCentre.x)}, ${flit(poly.polyCentre.y)})`;
+
+  return `
+    uniform shader scene;
+    uniform mat3 modelView;
+    uniform float saturation;
+    uniform float lightness;
+    uniform float hue;
+    uniform float opacity;
+    uniform float blendMode;
+    uniform vec2 coordOffset;
+    uniform float feather;
+    uniform float invertFeather;
+    uniform float dreamy;
+    uniform float bloomThreshold;
+
+    const float polyInradius = ${inradiusLit};
+    const vec2 polyCentre = ${polyCentreLit};
+
+${sdfBlock}
+
+    vec3 rgb2hsv(vec3 c) {
+      vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+      vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+      vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+      float d = q.x - min(q.w, q.y);
+      float e = 1.0e-10;
+      return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+    }
+
+    vec3 hsv2rgb(vec3 c) {
+      vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+      vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+      return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }
+
+    vec3 blendMultiply(vec3 base, vec3 blend) {
+      return base * blend;
+    }
+
+    vec3 blendOverlay(vec3 base, vec3 blend) {
+      return mix(
+        2.0 * base * blend,
+        1.0 - 2.0 * (1.0 - base) * (1.0 - blend),
+        step(0.5, base)
+      );
+    }
+
+    vec3 blendSoftLight(vec3 base, vec3 blend) {
+      vec3 d = mix(
+        sqrt(base),
+        ((16.0 * base - 12.0) * base + 4.0) * base,
+        step(0.25, base)
+      );
+      return mix(
+        base - (1.0 - 2.0 * blend) * base * (1.0 - base),
+        base + (2.0 * blend - 1.0) * (d - base),
+        step(0.5, blend)
+      );
+    }
+
+    vec3 blendColor(vec3 base, vec3 blend) {
+      vec3 blendHSV = rgb2hsv(blend);
+      vec3 baseHSV = rgb2hsv(base);
+      return hsv2rgb(vec3(blendHSV.x, blendHSV.y, baseHSV.z));
+    }
+
+    // ── Polygon feather mask ──
+    // Returns 0.0–1.0. At feather=0 the polygon interior is hard-masked so
+    // the rectangular ATTACHMENT bounds do not bleed effect colour outside
+    // the drawn polygon. At feather>0 the inward fade depth is normalised by
+    // the polygon's inradius — feather=1 fills the entire interior.
+    float computeFeather(vec2 localCoord) {
+      float sdf = sdPolygon(localCoord);
+      float fade;
+      if (feather <= 0.0) {
+        fade = step(0.0, -sdf);
+      } else {
+        float depth = feather * max(polyInradius, 1.0);
+        fade = 1.0 - smoothstep(-depth, 0.0, sdf);
+      }
+      return mix(fade, 1.0 - fade, invertFeather);
+    }
+
+    vec3 computeBlur(vec2 uv) {
+      const float R = 2.0;
+      vec3 acc = vec3(0.0);
+      acc += scene.eval(uv + vec2( 0.000,  1.000) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.383,  0.924) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.707,  0.707) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.924,  0.383) * R).rgb;
+      acc += scene.eval(uv + vec2( 1.000,  0.000) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.924, -0.383) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.707, -0.707) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.383, -0.924) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.000, -1.000) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.383, -0.924) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.707, -0.707) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.924, -0.383) * R).rgb;
+      acc += scene.eval(uv + vec2(-1.000,  0.000) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.924,  0.383) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.707,  0.707) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.383,  0.924) * R).rgb;
+      return acc / 16.0;
+    }
+
+    half4 main(vec2 coord) {
+      vec2 corrected = coord + coordOffset;
+      vec2 uv = (vec3(corrected, 1) * modelView).xy;
+      half4 color = scene.eval(uv);
+
+      vec3 hsv = rgb2hsv(color.rgb);
+      hsv.y = clamp(hsv.y * saturation, 0.0, 1.0);
+      hsv.z = clamp(hsv.z * lightness, 0.0, 1.0);
+      vec3 adjusted = hsv2rgb(hsv);
+
+      vec3 tint = hsv2rgb(vec3(fract(hue), 1.0, 1.0));
+
+      vec3 blended = blendMultiply(adjusted, tint);
+      blended = mix(blended, blendOverlay(adjusted, tint),   step(0.5, blendMode) * step(blendMode, 1.5));
+      blended = mix(blended, blendSoftLight(adjusted, tint), step(1.5, blendMode) * step(blendMode, 2.5));
+      blended = mix(blended, blendColor(adjusted, tint),     step(2.5, blendMode));
+
+      vec3 graded = mix(adjusted, blended, opacity);
+
+      if (dreamy != 0.0) {
+        vec3 blurred = computeBlur(uv);
+        float blurLuma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+        blurred = mix(vec3(blurLuma), blurred, saturation);
+        blurred = clamp(blurred * lightness, 0.0, 1.0);
+
+        if (dreamy > 0.0) {
+          float luma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+          float brightMask = smoothstep(bloomThreshold, bloomThreshold + 0.15, luma);
+          graded = clamp(graded + dreamy * brightMask * blurred, 0.0, 1.0);
+        } else {
+          float strength = -dreamy;
+          graded = clamp(graded + strength * (graded - blurred), 0.0, 1.0);
+        }
+      }
+
+      float fade = computeFeather(coord - polyCentre);
+      vec3 result = mix(color.rgb, graded, fade);
+
+      return half4(result, color.a);
+    }
+  `;
+}
+
+/**
+ * Uniform builder for polygon-host shaders. Same as getShaderUniforms but
+ * omits the three uniforms (shapeType, shapeSize, itemSize) the polygon
+ * shader does not declare — passing them would cause a "no such uniform"
+ * error from the OBR effect system.
+ */
+export function getPolygonShaderUniforms(
+  config: AuroraConfig,
+  coordOffset: { x: number; y: number },
+  bloomThreshold: number = 0.7,
+) {
+  return [
+    { name: "saturation", value: config.s / 100.0 },
+    { name: "lightness", value: config.l / 100.0 },
+    { name: "hue", value: config.h / 360.0 },
+    { name: "opacity", value: config.o / 100.0 },
+    { name: "blendMode", value: (config.b ?? 0) * 1.0 },
+    { name: "coordOffset", value: coordOffset },
+    { name: "feather", value: (config.f ?? 0) / 100.0 },
+    { name: "invertFeather", value: (config.fi ?? false) ? 1.0 : 0.0 },
+    { name: "dreamy", value: (config.d ?? 0) / 100.0 },
+    { name: "bloomThreshold", value: bloomThreshold },
+  ];
 }

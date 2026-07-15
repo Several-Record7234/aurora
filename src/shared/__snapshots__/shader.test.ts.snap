@@ -1,5 +1,188 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`getPolygonShaderCode > triangle shader is stable (snapshot) 1`] = `
+"
+    uniform shader scene;
+    uniform mat3 modelView;
+    uniform float saturation;
+    uniform float lightness;
+    uniform float hue;
+    uniform float opacity;
+    uniform float blendMode;
+    uniform vec2 coordOffset;
+    uniform float feather;
+    uniform float invertFeather;
+    uniform float dreamy;
+    uniform float bloomThreshold;
+
+    const float polyInradius = 2.5000;
+    const vec2 polyCentre = vec2(0.0000, 0.0000);
+
+    const vec2 p0 = vec2(0.0000, 0.0000);
+    const vec2 p1 = vec2(10.0000, 0.0000);
+    const vec2 p2 = vec2(5.0000, 8.0000);
+
+    float sdPolygon(vec2 p) {
+      float d = dot(p - p0, p - p0);
+      float s = 1.0;
+      {
+        vec2 e = p2 - p0;
+        vec2 w = p - p0;
+        float t = clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        vec2 b = w - e * t;
+        d = min(d, dot(b, b));
+        bvec3 c = bvec3(p.y >= p0.y, p.y < p2.y, e.x * w.y > e.y * w.x);
+        if (all(c) || all(not(c))) s = -s;
+      }
+      {
+        vec2 e = p0 - p1;
+        vec2 w = p - p1;
+        float t = clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        vec2 b = w - e * t;
+        d = min(d, dot(b, b));
+        bvec3 c = bvec3(p.y >= p1.y, p.y < p0.y, e.x * w.y > e.y * w.x);
+        if (all(c) || all(not(c))) s = -s;
+      }
+      {
+        vec2 e = p1 - p2;
+        vec2 w = p - p2;
+        float t = clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        vec2 b = w - e * t;
+        d = min(d, dot(b, b));
+        bvec3 c = bvec3(p.y >= p2.y, p.y < p1.y, e.x * w.y > e.y * w.x);
+        if (all(c) || all(not(c))) s = -s;
+      }
+      return s * sqrt(d);
+    }
+
+    vec3 rgb2hsv(vec3 c) {
+      vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+      vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+      vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+      float d = q.x - min(q.w, q.y);
+      float e = 1.0e-10;
+      return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+    }
+
+    vec3 hsv2rgb(vec3 c) {
+      vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+      vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+      return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }
+
+    vec3 blendMultiply(vec3 base, vec3 blend) {
+      return base * blend;
+    }
+
+    vec3 blendOverlay(vec3 base, vec3 blend) {
+      return mix(
+        2.0 * base * blend,
+        1.0 - 2.0 * (1.0 - base) * (1.0 - blend),
+        step(0.5, base)
+      );
+    }
+
+    vec3 blendSoftLight(vec3 base, vec3 blend) {
+      vec3 d = mix(
+        sqrt(base),
+        ((16.0 * base - 12.0) * base + 4.0) * base,
+        step(0.25, base)
+      );
+      return mix(
+        base - (1.0 - 2.0 * blend) * base * (1.0 - base),
+        base + (2.0 * blend - 1.0) * (d - base),
+        step(0.5, blend)
+      );
+    }
+
+    vec3 blendColor(vec3 base, vec3 blend) {
+      vec3 blendHSV = rgb2hsv(blend);
+      vec3 baseHSV = rgb2hsv(base);
+      return hsv2rgb(vec3(blendHSV.x, blendHSV.y, baseHSV.z));
+    }
+
+    // ── Polygon feather mask ──
+    // Returns 0.0–1.0. At feather=0 the polygon interior is hard-masked so
+    // the rectangular ATTACHMENT bounds do not bleed effect colour outside
+    // the drawn polygon. At feather>0 the inward fade depth is normalised by
+    // the polygon's inradius — feather=1 fills the entire interior.
+    float computeFeather(vec2 localCoord) {
+      float sdf = sdPolygon(localCoord);
+      float fade;
+      if (feather <= 0.0) {
+        fade = step(0.0, -sdf);
+      } else {
+        float depth = feather * max(polyInradius, 1.0);
+        fade = 1.0 - smoothstep(-depth, 0.0, sdf);
+      }
+      return mix(fade, 1.0 - fade, invertFeather);
+    }
+
+    vec3 computeBlur(vec2 uv) {
+      const float R = 2.0;
+      vec3 acc = vec3(0.0);
+      acc += scene.eval(uv + vec2( 0.000,  1.000) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.383,  0.924) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.707,  0.707) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.924,  0.383) * R).rgb;
+      acc += scene.eval(uv + vec2( 1.000,  0.000) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.924, -0.383) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.707, -0.707) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.383, -0.924) * R).rgb;
+      acc += scene.eval(uv + vec2( 0.000, -1.000) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.383, -0.924) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.707, -0.707) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.924, -0.383) * R).rgb;
+      acc += scene.eval(uv + vec2(-1.000,  0.000) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.924,  0.383) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.707,  0.707) * R).rgb;
+      acc += scene.eval(uv + vec2(-0.383,  0.924) * R).rgb;
+      return acc / 16.0;
+    }
+
+    half4 main(vec2 coord) {
+      vec2 corrected = coord + coordOffset;
+      vec2 uv = (vec3(corrected, 1) * modelView).xy;
+      half4 color = scene.eval(uv);
+
+      vec3 hsv = rgb2hsv(color.rgb);
+      hsv.y = clamp(hsv.y * saturation, 0.0, 1.0);
+      hsv.z = clamp(hsv.z * lightness, 0.0, 1.0);
+      vec3 adjusted = hsv2rgb(hsv);
+
+      vec3 tint = hsv2rgb(vec3(fract(hue), 1.0, 1.0));
+
+      vec3 blended = blendMultiply(adjusted, tint);
+      blended = mix(blended, blendOverlay(adjusted, tint),   step(0.5, blendMode) * step(blendMode, 1.5));
+      blended = mix(blended, blendSoftLight(adjusted, tint), step(1.5, blendMode) * step(blendMode, 2.5));
+      blended = mix(blended, blendColor(adjusted, tint),     step(2.5, blendMode));
+
+      vec3 graded = mix(adjusted, blended, opacity);
+
+      if (dreamy != 0.0) {
+        vec3 blurred = computeBlur(uv);
+        float blurLuma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+        blurred = mix(vec3(blurLuma), blurred, saturation);
+        blurred = clamp(blurred * lightness, 0.0, 1.0);
+
+        if (dreamy > 0.0) {
+          float luma = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+          float brightMask = smoothstep(bloomThreshold, bloomThreshold + 0.15, luma);
+          graded = clamp(graded + dreamy * brightMask * blurred, 0.0, 1.0);
+        } else {
+          float strength = -dreamy;
+          graded = clamp(graded + strength * (graded - blurred), 0.0, 1.0);
+        }
+      }
+
+      float fade = computeFeather(coord - polyCentre);
+      vec3 result = mix(color.rgb, graded, fade);
+
+      return half4(result, color.a);
+    }
+  "
+`;
+
 exports[`getShaderCode > shader code is stable (snapshot) 1`] = `
 "
     uniform shader scene;

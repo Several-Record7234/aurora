@@ -13,6 +13,10 @@ import {
   SHAPE_TYPE_CIRCLE,
   SHAPE_TYPE_TRIANGLE,
   SHAPE_TYPE_HEXAGON,
+  SHAPE_TYPE_POLYGON,
+  POLYGON_MAX_VERTICES,
+  getPolygonShaderCode,
+  getPolygonShaderUniforms,
   type ShaderGeometry,
 } from "./shader";
 import { DEFAULT_CONFIG, type AuroraConfig } from "./types";
@@ -250,5 +254,118 @@ describe("getShaderCode", () => {
 
   it("shader code is stable (snapshot)", () => {
     expect(code).toMatchSnapshot();
+  });
+});
+
+// ── getPolygonShaderCode ────────────────────────────────────────────────
+
+describe("getPolygonShaderCode", () => {
+  const TRIANGLE = {
+    vertices: [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 5, y: 8 },
+    ],
+    inradius: 2.5,
+    polyCentre: { x: 0, y: 0 },
+  };
+
+  it("polygon shape type index is distinct from built-in shapes", () => {
+    expect(SHAPE_TYPE_POLYGON).toBe(4);
+    expect(SHAPE_TYPE_POLYGON).not.toBe(SHAPE_TYPE_RECT);
+    expect(SHAPE_TYPE_POLYGON).not.toBe(SHAPE_TYPE_HEXAGON);
+  });
+
+  it("emits one const vec2 declaration per vertex", () => {
+    const code = getPolygonShaderCode(TRIANGLE);
+    expect(code).toContain("const vec2 p0 = vec2(0.0000, 0.0000)");
+    expect(code).toContain("const vec2 p1 = vec2(10.0000, 0.0000)");
+    expect(code).toContain("const vec2 p2 = vec2(5.0000, 8.0000)");
+  });
+
+  it("bakes inradius as a const float", () => {
+    const code = getPolygonShaderCode(TRIANGLE);
+    expect(code).toContain("const float polyInradius = 2.5000");
+  });
+
+  it("declares the polygon SDF function", () => {
+    const code = getPolygonShaderCode(TRIANGLE);
+    expect(code).toContain("float sdPolygon(vec2 p)");
+  });
+
+  it("uses no SkSL array-initializer syntax (Q1 constraint)", () => {
+    // Skia rejects T[N](...) constructors and inline array initializers.
+    // The unrolled form must contain neither.
+    const code = getPolygonShaderCode(TRIANGLE);
+    expect(code).not.toMatch(/vec2\s*\[\s*\d+\s*\]/);
+    expect(code).not.toMatch(/float\s*\[\s*\d+\s*\]/);
+  });
+
+  it("omits itemSize, shapeSize, shapeType uniforms", () => {
+    const code = getPolygonShaderCode(TRIANGLE);
+    expect(code).not.toContain("uniform vec2 itemSize");
+    expect(code).not.toContain("uniform vec2 shapeSize");
+    expect(code).not.toContain("uniform float shapeType");
+  });
+
+  it("retains computeFeather, computeBlur, and main", () => {
+    const code = getPolygonShaderCode(TRIANGLE);
+    expect(code).toContain("computeFeather");
+    expect(code).toContain("computeBlur");
+    expect(code).toContain("half4 main(vec2 coord)");
+  });
+
+  it("throws on under 3 vertices", () => {
+    expect(() =>
+      getPolygonShaderCode({
+        vertices: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+        inradius: 0,
+        polyCentre: { x: 0, y: 0 },
+      }),
+    ).toThrow();
+  });
+
+  it("throws on more than POLYGON_MAX_VERTICES", () => {
+    const verts: { x: number; y: number }[] = [];
+    for (let i = 0; i <= POLYGON_MAX_VERTICES; i++) {
+      verts.push({ x: i, y: 0 });
+    }
+    expect(() =>
+      getPolygonShaderCode({
+        vertices: verts,
+        inradius: 0,
+        polyCentre: { x: 0, y: 0 },
+      }),
+    ).toThrow();
+  });
+
+  it("triangle shader is stable (snapshot)", () => {
+    expect(getPolygonShaderCode(TRIANGLE)).toMatchSnapshot();
+  });
+});
+
+describe("getPolygonShaderUniforms", () => {
+  it("returns 10 uniforms (3 fewer than full shader)", () => {
+    const u = getPolygonShaderUniforms(DEFAULT_CONFIG, { x: 0, y: 0 });
+    expect(u).toHaveLength(10);
+  });
+
+  it("omits itemSize, shapeSize, shapeType", () => {
+    const names = getPolygonShaderUniforms(DEFAULT_CONFIG, {
+      x: 0,
+      y: 0,
+    }).map((u) => u.name);
+    expect(names).not.toContain("itemSize");
+    expect(names).not.toContain("shapeSize");
+    expect(names).not.toContain("shapeType");
+  });
+
+  it("uses provided coordOffset", () => {
+    const u = getPolygonShaderUniforms(DEFAULT_CONFIG, { x: 7, y: 9 });
+    const coord = u.find((x) => x.name === "coordOffset");
+    expect(coord?.value).toEqual({ x: 7, y: 9 });
   });
 });

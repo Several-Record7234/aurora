@@ -47,7 +47,7 @@ Select and right-click any item on the **Map layer** and choose **Add Aurora** f
 
 > ![public\images\Context - Add Aurora.png](https://github.com/user-attachments/assets/37071643-45f5-4fef-84db-4abf641d46fd)
 
-**💡 Pro tip:** Want to affect multiple maps with a single effect? Draw a large rectangle on the **Drawing** layer, move it to the **Map** layer, then **Add Aurora** to that rectangle. The shader covers the full area of whatever item it's attached to, so one big shape can mood-change your entire Scene in one go.
+**💡 Pro tip:** Want to affect multiple maps with a single effect, or shape the mood to an irregular region? Draw any shape — a rectangle, a freehand path, or a closed curve — on the **Drawing** layer, move it to the **Map** layer, then **Add Aurora** to it. Aurora now follows the exact polygon boundary, so the feather fade respects the real edge of whatever you've drawn rather than a bounding box.
 
 ### 4. Adjust The Settings
 

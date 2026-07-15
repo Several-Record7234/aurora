@@ -11,7 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@owlbear-rodeo/sdk": "^3.1.0"
+    "@owlbear-rodeo/sdk": "^3.1.0",
+    "clipper2-js": "^1.2.4"
   },
   "devDependencies": {
     "marked": "^18.0.2",

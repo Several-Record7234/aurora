@@ -13,6 +13,16 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.9.3",
+    date: "2026-05-25",
+    changes: [
+      {
+        type: "feat",
+        text: "**Polygon hosts**: Aurora can now be added to freehand paths and closed curves drawn with the Drawing toolset. The feather gradient follows the true polygon edge, so irregular regions fade cleanly instead of bleeding past their visible boundary.",
+      },
+    ],
+  },
+  {
     version: "0.9.2",
     date: "2026-04-01",
     changes: [

@@ -18,10 +18,41 @@
  *     state.
  */
 
-import OBR, { buildEffect, Effect, Item, isShape } from "@owlbear-rodeo/sdk";
-import { getShaderCode, getShaderUniforms, ShaderGeometry, SHAPE_TYPE_RECT, SHAPE_TYPE_CIRCLE, SHAPE_TYPE_TRIANGLE, SHAPE_TYPE_HEXAGON } from "../shared/shader";
+import OBR, { buildEffect, Effect, Item, isShape, isPath } from "@owlbear-rodeo/sdk";
+import type { Curve, Path, Vector2 } from "@owlbear-rodeo/sdk";
+import {
+  getShaderCode,
+  getShaderUniforms,
+  getPolygonShaderCode,
+  getPolygonShaderUniforms,
+  POLYGON_MAX_VERTICES,
+  ShaderGeometry,
+  SHAPE_TYPE_RECT,
+  SHAPE_TYPE_CIRCLE,
+  SHAPE_TYPE_TRIANGLE,
+  SHAPE_TYPE_HEXAGON,
+} from "../shared/shader";
 import { AuroraConfig, isAuroraConfig } from "../shared/types";
 import { CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY, LUMA_KEY } from "../shared/keys";
+import {
+  extractPathVertices,
+  tessellatePathCurve,
+  cleanAndSimplify,
+  computeInradius,
+  recentre,
+  aabbCentre,
+  hashVertices,
+} from "./polygonGeometry";
+
+/** True iff this item is a candidate polygon host (PATH or closed CURVE). */
+function isPolygonHost(item: Item): boolean {
+  if (isPath(item)) return true;
+  if (item.type === "CURVE") {
+    const curve = item as Curve;
+    return curve.style?.closed === true;
+  }
+  return false;
+}
 
 // ── Effect Snapshot Cache ─────────────────────────────────────────
 //
@@ -40,12 +71,65 @@ import { CONFIG_KEY, EFFECT_META_KEY, EFFECT_SOURCE_KEY, LUMA_KEY } from "../sha
 
 const snapshotCache = new Map<string, string>();
 
-/** Serialise Aurora config + parent transform into a stable comparison key */
+// ── Inradius cache (polygon hosts) ──────────────────────────────────────────
+//
+// computeInradius costs ~12 ms at N=24 (see progress.md Q3). It only changes
+// when the polygon's vertices change, so we cache by a hash of the shader-
+// local vertex list. Cache key = hashVertices(shaderLocalVerts). Cache
+// lifetime is the process — cleared when the scene closes alongside the
+// snapshot cache. A reshape produces a different hash and naturally evicts
+// the old entry.
+const inradiusCache = new Map<string, number>();
+
+function getCachedInradius(verts: Vector2[]): number {
+  const key = hashVertices(verts);
+  const hit = inradiusCache.get(key);
+  if (hit !== undefined) return hit;
+  const r = computeInradius(verts);
+  inradiusCache.set(key, r);
+  return r;
+}
+
+// Self-intersect warning de-dup. Without this, a slider drag on a bow-tie
+// polygon would re-fire the notification on every reconcile pass. The set is
+// cleared alongside snapshotCache on scene close so re-opening the scene
+// re-warns the user.
+const warnedSelfIntersect = new Set<string>();
+
+function notifySelfIntersect(itemId: string): void {
+  if (warnedSelfIntersect.has(itemId)) return;
+  warnedSelfIntersect.add(itemId);
+  OBR.notification.show(
+    "Aurora: polygon self-intersects — only the largest enclosed region is affected.",
+    "WARNING",
+  );
+}
+
+/** Serialise Aurora config + parent transform into a stable comparison key.
+ *
+ * For PATH and CURVE hosts a geometry fingerprint is included so that
+ * reshaping the polygon (without changing position/rotation/scale) still
+ * triggers a rebuild of the baked-vertex shader. JSON.stringify of the
+ * commands or points array is the cheapest correct option — typical
+ * freehand strokes have a few hundred commands, well below the cost of
+ * a single getItemBounds round-trip. */
 function effectSnapshot(config: AuroraConfig, item: Item): string {
   const strokeWidth = isShape(item) ? (item.style.strokeWidth ?? 0) : 0;
   const shapeW = isShape(item) ? item.width : 0;
   const shapeH = isShape(item) ? item.height : 0;
   const shapeType = isShape(item) ? item.shapeType : "";
+
+  let geometryFp = "";
+  if (isPath(item)) {
+    geometryFp = JSON.stringify((item as Path).commands);
+  } else if (item.type === "CURVE") {
+    const curve = item as Curve;
+    geometryFp =
+      JSON.stringify(curve.points) +
+      "|" + (curve.style?.tension ?? 0) +
+      "|" + (curve.style?.closed ?? false);
+  }
+
   return JSON.stringify([
     config.s, config.l, config.h, config.o, config.e, config.b ?? 0,
     config.f ?? 0, config.fi ?? false, config.d ?? 0,
@@ -56,6 +140,7 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
     item.visible,
     item.layer,
     item.type, shapeType, strokeWidth, shapeW, shapeH,
+    geometryFp,
   ]);
 }
 
@@ -75,6 +160,8 @@ async function removeAllEffects(): Promise<void> {
     await OBR.scene.local.deleteItems(effects.map((e) => e.id));
   }
   snapshotCache.clear();
+  inradiusCache.clear();
+  warnedSelfIntersect.clear();
 }
 
 // ── Coordinate Offset ─────────────────────────────────────────────
@@ -273,6 +360,114 @@ async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
   }
 }
 
+// ── Polygon (PATH / CURVE) shader geometry ─────────────────────────────────
+
+interface PolygonShaderGeometry {
+  coordOffset: Vector2;
+  boundsCenter: Vector2;
+  polyCentre: Vector2;
+  shaderLocalVerts: Vector2[];
+  inradius: number;
+}
+
+/**
+ * Extract polygon shader inputs for a PATH or closed CURVE host.
+ *
+ * Pipeline:
+ *   1. Flatten commands / tessellate spline to world-space vertices.
+ *   2. Clean (Clipper offset=0) and simplify to <= POLYGON_MAX_VERTICES.
+ *   3. Look up world-space AABB via OBR.scene.items.getItemBounds (this
+ *      already accounts for item position/rotation/scale).
+ *   4. Compute coordOffset using the Flicker PATH formula (verified for
+ *      freehand and primitive-derived PATH and for CURVE — see
+ *      c:\Coding\Flicker\src\background\effectManager.ts:141).
+ *   5. Transform vertices into the shader's correctedCoord frame.
+ *   6. Look up or compute the inradius (cached by vertex hash; ~12 ms cold,
+ *      free on cache hit).
+ *
+ * Returns null if extraction or simplification leaves fewer than 3 vertices,
+ * or if the item is an open CURVE (no enclosed area).
+ *
+ * Vertices are extracted in item-local (pre-rotation, pre-scale, pre-position)
+ * coordinates so the shader's `coord` (which OBR delivers in the same item-
+ * local frame) lines up regardless of parent.rotation. polyCentre is the AABB
+ * centre of the item-local verts and is rotation-invariant; subtracting it
+ * from coord in the shader puts the SDF eval point in vert-relative space.
+ *
+ * Effect.position still uses the world bounds.center so OBR positions the
+ * ATTACHMENT visually over the rotated polygon.
+ */
+async function getPolygonShaderGeometry(
+  item: Item,
+): Promise<PolygonShaderGeometry | null> {
+  let localVerts: Vector2[];
+
+  if (isPath(item)) {
+    const path = item as Path;
+    localVerts = extractPathVertices(path.commands);
+  } else if (item.type === "CURVE") {
+    const curve = item as Curve;
+    if (curve.style?.closed !== true) return null;
+    localVerts = tessellatePathCurve(
+      curve.points,
+      curve.style?.tension ?? 0,
+    );
+  } else {
+    return null;
+  }
+  if (localVerts.length < 3) return null;
+
+  const { vertices: simplified, rings } = cleanAndSimplify(
+    localVerts,
+    POLYGON_MAX_VERTICES,
+  );
+  if (simplified.length < 3) return null;
+  if (rings > 1) notifySelfIntersect(item.id);
+
+  let bounds;
+  try {
+    bounds = await OBR.scene.items.getItemBounds([item.id]);
+  } catch {
+    return null;
+  }
+
+  const boundsCenter = {
+    x: (bounds.min.x + bounds.max.x) / 2,
+    y: (bounds.min.y + bounds.max.y) / 2,
+  };
+  // Empirical formula derived from a diagnostic: with coordOffset = (0,0),
+  // scene.eval samples at item.position. That tells us modelView's translation
+  // component is item.position (not bounds.center, not parent.position).
+  // For uv = corrected + item.position to equal the pixel's world position W:
+  //   corrected = W - item.position
+  //   coord = W - effect.position = W - bounds.center (effect-local)
+  //   coordOffset = corrected - coord = bounds.center - item.position
+  // Differs sharply from Flicker's halfW + 2*(item.position - bounds.center) +
+  // EXCESS, which appears to have been masked by Flicker's circular falloff
+  // hiding scene-sampling errors. This formula is exact at rotation=0; under
+  // rotation modelView also rotates corrected, so the relationship may shift.
+  const coordOffset = {
+    x: boundsCenter.x - item.position.x,
+    y: boundsCenter.y - item.position.y,
+  };
+
+  // polyCentre lives in the item-local frame (rotation-invariant) so the
+  // shader can subtract it from `coord` (also item-local) and land in the
+  // vert frame at any parent.rotation.
+  const localCentre = aabbCentre(simplified);
+
+  const shaderLocalVerts = recentre(simplified, localCentre);
+  const inradius = getCachedInradius(shaderLocalVerts);
+
+  return {
+    coordOffset,
+    boundsCenter,
+    polyCentre: localCentre,
+    shaderLocalVerts,
+    inradius,
+  };
+}
+
 /**
  * Build an ATTACHMENT effect for a MAP-layer item.
  *
@@ -320,7 +515,56 @@ async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
  *    small positional offset. The shader adds this offset to local coords
  *    before transforming to screen-space.
  */
-async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Effect> {
+async function buildAuroraEffect(
+  parent: Item,
+  config: AuroraConfig,
+): Promise<Effect | null> {
+  const rawLuma = parent.metadata[LUMA_KEY];
+  const bloomThreshold =
+    typeof rawLuma === "number" && rawLuma > 0 ? rawLuma : 0.7;
+
+  // ── PATH / CURVE polygon host ──
+  // Per Flicker (c:\Coding\Flicker\src\background\effectManager.ts:247) the
+  // effect is positioned at the world AABB centre, rotated by parent rotation
+  // and held at unit scale; ATTACHMENT auto-fill then matches the polygon's
+  // bounding rectangle.
+  if (isPolygonHost(parent)) {
+    const polyGeom = await getPolygonShaderGeometry(parent);
+    if (!polyGeom) return null;
+
+    const effect = buildEffect()
+      .attachedTo(parent.id)
+      .effectType("ATTACHMENT")
+      .position(polyGeom.boundsCenter)
+      .rotation(parent.rotation)
+      .scale({ x: 1, y: 1 })
+      .visible(parent.visible)
+      .zIndex(getLayerZIndex(parent))
+      .locked(true)
+      .disableHit(true)
+      .disableAttachmentBehavior(["COPY", "SCALE"])
+      .build();
+
+    effect.sksl = getPolygonShaderCode({
+      vertices: polyGeom.shaderLocalVerts,
+      inradius: polyGeom.inradius,
+      polyCentre: polyGeom.polyCentre,
+    });
+    effect.uniforms = getPolygonShaderUniforms(
+      config,
+      polyGeom.coordOffset,
+      bloomThreshold,
+    );
+    effect.layer = "POST_PROCESS";
+    effect.disableAutoZIndex = true;
+    effect.metadata = {
+      [EFFECT_META_KEY]: true,
+      [EFFECT_SOURCE_KEY]: parent.id,
+    };
+    return effect;
+  }
+
+  // ── IMAGE / SHAPE host (original path) ──
   const effect = buildEffect()
     .attachedTo(parent.id)
     .effectType("ATTACHMENT")
@@ -334,18 +578,16 @@ async function buildAuroraEffect(parent: Item, config: AuroraConfig): Promise<Ef
     .disableAttachmentBehavior(["COPY"])
     .build();
 
-  // Set shader properties directly on the built object (not via builder)
-  const rawLuma = parent.metadata[LUMA_KEY];
-  const bloomThreshold = typeof rawLuma === "number" && rawLuma > 0 ? rawLuma : 0.7;
-
   effect.sksl = getShaderCode();
-  effect.uniforms = getShaderUniforms(config, await getShaderGeometry(parent), bloomThreshold);
+  effect.uniforms = getShaderUniforms(
+    config,
+    await getShaderGeometry(parent),
+    bloomThreshold,
+  );
 
   effect.layer = "POST_PROCESS";
-  // Prevent OBR's auto-z-index from overriding the layer-composed value set above
   effect.disableAutoZIndex = true;
 
-  // Tag with metadata so we can find/manage this effect later
   effect.metadata = {
     [EFFECT_META_KEY]: true,
     [EFFECT_SOURCE_KEY]: parent.id,
@@ -445,9 +687,14 @@ async function reconcileEffects(items: Item[]): Promise<void> {
       snapshotCache.set(itemId, snap);
     }
 
-    // Build all new effects in parallel (each calls getItemBounds)
-    const effectsToAdd = await Promise.all(
+    // Build all new effects in parallel (each calls getItemBounds).
+    // buildAuroraEffect returns null for unbuildable polygon hosts (open
+    // curves, sub-3-vertex paths); filter those out before submitting.
+    const builtMaybe = await Promise.all(
       toBuild.map(({ item, config }) => buildAuroraEffect(item, config))
+    );
+    const effectsToAdd: Effect[] = builtMaybe.filter(
+      (e): e is Effect => e !== null,
     );
 
     // ── Execute batched SDK operations ──────────────────────────

@@ -14,6 +14,7 @@
  */
 
 import OBR from "@owlbear-rodeo/sdk";
+import type { Curve } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
 import { DEFAULT_CONFIG, isAuroraConfig } from "../shared/types";
 import { CONFIG_KEY, LAST_CONFIG_KEY } from "../shared/keys";
@@ -56,7 +57,29 @@ export function createAuroraMenu() {
       },
     ],
     async onClick(context) {
-      await OBR.scene.items.updateItems(context.items, (items) => {
+      // Host validation: open CURVE items have no enclosed area, so Aurora
+      // would have nowhere to draw. Reject them with a user-visible
+      // notification rather than silently skipping (the GM is likely
+      // expecting the effect to appear). See progress.md Q2 resolution.
+      const eligibleIds: string[] = [];
+      let rejectedOpenCurves = 0;
+      for (const item of context.items) {
+        if (item.type === "CURVE" && (item as Curve).style?.closed !== true) {
+          rejectedOpenCurves++;
+          continue;
+        }
+        eligibleIds.push(item.id);
+      }
+      if (rejectedOpenCurves > 0) {
+        const msg =
+          rejectedOpenCurves === 1
+            ? "Aurora can only be added to closed curves — open this curve first."
+            : `Aurora skipped ${rejectedOpenCurves} open curves — close them first.`;
+        OBR.notification.show(msg, "WARNING");
+      }
+      if (eligibleIds.length === 0) return;
+
+      await OBR.scene.items.updateItems(eligibleIds, (items) => {
         for (const item of items) {
           const lastConfig = item.metadata[LAST_CONFIG_KEY];
           if (isAuroraConfig(lastConfig)) {
