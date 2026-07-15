@@ -74,6 +74,6 @@ reports/
 
 # Claude-related files
 .claude/
-CLAUDE.md
-progress.md
+Claude.md
 Updating the version number.txt
+work-markers.log
