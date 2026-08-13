@@ -7,37 +7,31 @@
  *   - menu.html     → context-menu embed (per-item HSLO controls)
  *   - background.html → background page (effect manager + context menus)
  *
- * The injectManifestVersion plugin patches public/manifest.json at build
+ * The injectManifestVersion plugin patches dist/manifest.json at build
  * time so that the OBR manifest always matches the version in package.json.
  * package.json is the single source of truth for the version number.
  */
 /// <reference types="vitest" />
 import { defineConfig, type Plugin } from "vite";
 import { resolve } from "path";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 
-/** Read the version string from package.json at build time */
-function getPackageVersion(): string {
-  const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf-8"));
-  return pkg.version;
-}
+const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf-8"));
 
 /**
- * Vite plugin that rewrites the "version" field in manifest.json
- * (copied from public/) to match the version in package.json.
- * Runs in the generateBundle hook so it patches the final output.
+ * Rewrite dist/manifest.json "version" to match package.json at build time.
+ * Uses closeBundle (post-copy) because public/ files bypass the Rollup bundle
+ * pipeline and are never present in the generateBundle bundle object.
  */
 function injectManifestVersion(): Plugin {
   return {
     name: "inject-manifest-version",
     apply: "build",
-    generateBundle(_options, bundle) {
-      const asset = bundle["manifest.json"];
-      if (asset && asset.type === "asset" && typeof asset.source === "string") {
-        const manifest = JSON.parse(asset.source);
-        manifest.version = getPackageVersion();
-        asset.source = JSON.stringify(manifest, null, 2) + "\n";
-      }
+    closeBundle() {
+      const manifestPath = resolve(__dirname, "dist", "manifest.json");
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+      manifest.version = pkg.version;
+      writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
     },
   };
 }
