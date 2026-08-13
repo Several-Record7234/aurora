@@ -1,73 +1,91 @@
 /**
  * Aurora – one-time metadata key migration.
  *
- * When the plugin namespace changed from "com.aurora-vtt.aurora" to the
- * hosting URL "https://aurora-0nm6.onrender.com", any rooms that already
- * had Aurora effects retained the old keys. This module detects old-format
- * metadata and rewrites it under the new namespace, then deletes the old
- * keys so the migration only runs once.
+ * Aurora's plugin namespace (the prefix on every metadata key) has changed
+ * several times as hosting moved. Each time, rooms and items that already
+ * held Aurora data kept the old-namespace keys. This module detects any
+ * known old-namespace metadata and rewrites it under the current namespace,
+ * then deletes the old keys so each migration runs only once per room/item.
  *
- * Migrates:
- *   Room metadata  – presets, uiState
- *   Item metadata  – config, isEffect, sourceItemId
+ * Current namespace: see PLUGIN_BASE in shared/pluginId.ts
+ *   (com.several-record.aurora)
  *
- * REMOVABLE: This entire file can be deleted in a future major release
- * once all existing rooms have been migrated. When removing, also delete:
+ * Superseded namespaces still migrated from (newest first):
+ *   https://aurora.several-record.com    Cloudflare Pages, URL-style key
+ *   https://aurora-0nm6.onrender.com     Render hosting
+ *
+ * The original "com.aurora-vtt.aurora" namespace was retired in v0.9.3 — a
+ * room not opened since that era keeps its orphaned keys, which are ignored.
+ *
+ * REMOVABLE: This entire file can be deleted in a future major release once
+ * all active rooms have been migrated. When removing, also delete:
  *   - The import and calls in background/main.ts
- *   - The OLD_BASE, OLD_MENU_IDS, and removal loop in createAuroraMenu.ts
+ *   - The OLD_MENU_IDS removal loop in createAuroraMenu.ts
  */
 
 import OBR from "@owlbear-rodeo/sdk";
 import { getPluginId } from "../shared/pluginId";
 
-const OLD_BASE = "com.aurora-vtt.aurora";
+/** A superseded namespace and the key paths that may still exist under it. */
+interface LegacyNamespace {
+  base: string;
+  roomKeys: readonly string[];
+  itemKeys: readonly string[];
+}
 
-/** Old-namespace key paths that may exist on room metadata */
-const ROOM_KEYS = ["presets", "uiState"] as const;
-
-/** Old-namespace key paths that may exist on item metadata */
-const ITEM_KEYS = ["config", "isEffect", "sourceItemId"] as const;
-
-// ── Render → Cloudflare Pages namespace migration ──────────────────────────
-// When hosting moved from aurora-0nm6.onrender.com to aurora.several-record.com
-// the PLUGIN_BASE changed, which means all metadata keys changed. This migration
-// copies data from the old Render-era keys to the new CF keys and deletes the old
-// ones so it only runs once per room/item.
-
-const RENDER_BASE = "https://aurora-0nm6.onrender.com";
-
-/** Room-level keys that existed under the Render namespace */
-const RENDER_ROOM_KEYS = ["presets"] as const;
-
-/** Item-level keys that existed under the Render namespace */
-const RENDER_ITEM_KEYS = ["config", "lastConfig", "isEffect", "sourceItemId", "luma"] as const;
+/**
+ * Every namespace Aurora has used before the current one, NEWEST FIRST.
+ * Order matters: when two eras' keys somehow coexist, the newest is copied
+ * first and wins, so the most recent data is preserved.
+ */
+const LEGACY_NAMESPACES: readonly LegacyNamespace[] = [
+  {
+    base: "https://aurora.several-record.com",
+    roomKeys: ["presets"],
+    itemKeys: ["config", "lastConfig", "isEffect", "sourceItemId", "luma"],
+  },
+  {
+    base: "https://aurora-0nm6.onrender.com",
+    roomKeys: ["presets"],
+    itemKeys: ["config", "lastConfig", "isEffect", "sourceItemId", "luma"],
+  },
+];
 
 /**
  * Migrate any old-namespace metadata to the current namespace.
  * Safe to call on every startup — it no-ops when no old keys are found.
  */
 export async function migrateMetadata(): Promise<void> {
-  await migrateRoomMetadata();
-  await migrateRenderRoomMetadata();
+  for (const ns of LEGACY_NAMESPACES) {
+    await migrateRoomFromBase(ns.base, ns.roomKeys);
+  }
   if (await OBR.scene.isReady()) {
     await migrateItemMetadata();
-    await migrateRenderItemMetadata();
   }
 }
 
-async function migrateRoomMetadata(): Promise<void> {
+/** Migrate old-namespace keys on scene items. Exported so it can also
+ *  run when the user switches to a different scene in the same room. */
+export async function migrateItemMetadata(): Promise<void> {
+  for (const ns of LEGACY_NAMESPACES) {
+    await migrateItemsFromBase(ns.base, ns.itemKeys);
+  }
+}
+
+async function migrateRoomFromBase(base: string, roomKeys: readonly string[]): Promise<void> {
   const metadata = await OBR.room.getMetadata();
   const updates: Record<string, unknown> = {};
   let found = false;
 
-  for (const path of ROOM_KEYS) {
-    const oldKey = `${OLD_BASE}/${path}`;
+  for (const path of roomKeys) {
+    const oldKey = `${base}/${path}`;
     const newKey = getPluginId(path);
-    if (metadata[oldKey] !== undefined && metadata[newKey] === undefined) {
-      updates[newKey] = metadata[oldKey];
-      // OBR's setMetadata performs a shallow merge: setting a key to
-      // `undefined` removes it from the metadata object. This is the
-      // standard OBR pattern for deleting room metadata keys.
+    if (metadata[oldKey] !== undefined) {
+      // Only copy when the current key is empty, so a newer era already
+      // migrated does not get clobbered by an older one.
+      if (metadata[newKey] === undefined) updates[newKey] = metadata[oldKey];
+      // OBR's setMetadata shallow-merges; setting a key to `undefined`
+      // removes it. Always clean up the old key so nothing is orphaned.
       updates[oldKey] = undefined;
       found = true;
     }
@@ -75,21 +93,18 @@ async function migrateRoomMetadata(): Promise<void> {
 
   if (found) {
     await OBR.room.setMetadata(updates);
-    console.log("[Aurora] Migrated room metadata from old namespace");
+    console.log(`[Aurora] Migrated room metadata from ${base}`);
   }
 }
 
-/** Migrate old-namespace keys on scene items. Exported so it can also
- *  run when the user switches to a different scene in the same room. */
-export async function migrateItemMetadata(): Promise<void> {
+async function migrateItemsFromBase(base: string, itemKeys: readonly string[]): Promise<void> {
   const allItems = await OBR.scene.items.getItems();
   const itemsToUpdate: string[] = [];
 
-  // First pass: identify items with old-namespace keys
+  // First pass: identify items carrying any old-namespace key.
   for (const item of allItems) {
-    for (const path of ITEM_KEYS) {
-      const oldKey = `${OLD_BASE}/${path}`;
-      if (item.metadata[oldKey] !== undefined) {
+    for (const path of itemKeys) {
+      if (item.metadata[`${base}/${path}`] !== undefined) {
         itemsToUpdate.push(item.id);
         break; // Only need to flag the item once
       }
@@ -100,72 +115,17 @@ export async function migrateItemMetadata(): Promise<void> {
 
   await OBR.scene.items.updateItems(itemsToUpdate, (items) => {
     for (const item of items) {
-      for (const path of ITEM_KEYS) {
-        const oldKey = `${OLD_BASE}/${path}`;
+      for (const path of itemKeys) {
+        const oldKey = `${base}/${path}`;
         const newKey = getPluginId(path);
         if (item.metadata[oldKey] !== undefined && item.metadata[newKey] === undefined) {
           item.metadata[newKey] = item.metadata[oldKey];
         }
-        // Always clean up old key
+        // Always clean up the old key.
         delete item.metadata[oldKey];
       }
     }
   });
 
-  console.log(`[Aurora] Migrated item metadata on ${itemsToUpdate.length} item(s)`);
-}
-
-// ── Render → CF migrations ─────────────────────────────────────────────────
-
-async function migrateRenderRoomMetadata(): Promise<void> {
-  const metadata = await OBR.room.getMetadata();
-  const updates: Record<string, unknown> = {};
-  let found = false;
-
-  for (const path of RENDER_ROOM_KEYS) {
-    const oldKey = `${RENDER_BASE}/${path}`;
-    const newKey = getPluginId(path);
-    if (metadata[oldKey] !== undefined && metadata[newKey] === undefined) {
-      updates[newKey] = metadata[oldKey];
-      updates[oldKey] = undefined;
-      found = true;
-    }
-  }
-
-  if (found) {
-    await OBR.room.setMetadata(updates);
-    console.log("[Aurora] Migrated room metadata from Render namespace");
-  }
-}
-
-export async function migrateRenderItemMetadata(): Promise<void> {
-  const allItems = await OBR.scene.items.getItems();
-  const itemsToUpdate: string[] = [];
-
-  for (const item of allItems) {
-    for (const path of RENDER_ITEM_KEYS) {
-      const oldKey = `${RENDER_BASE}/${path}`;
-      if (item.metadata[oldKey] !== undefined) {
-        itemsToUpdate.push(item.id);
-        break;
-      }
-    }
-  }
-
-  if (itemsToUpdate.length === 0) return;
-
-  await OBR.scene.items.updateItems(itemsToUpdate, (items) => {
-    for (const item of items) {
-      for (const path of RENDER_ITEM_KEYS) {
-        const oldKey = `${RENDER_BASE}/${path}`;
-        const newKey = getPluginId(path);
-        if (item.metadata[oldKey] !== undefined && item.metadata[newKey] === undefined) {
-          item.metadata[newKey] = item.metadata[oldKey];
-        }
-        delete item.metadata[oldKey];
-      }
-    }
-  });
-
-  console.log(`[Aurora] Migrated item metadata (Render→CF) on ${itemsToUpdate.length} item(s)`);
+  console.log(`[Aurora] Migrated item metadata from ${base} on ${itemsToUpdate.length} item(s)`);
 }

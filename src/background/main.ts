@@ -23,7 +23,7 @@ const obrTimeout = setTimeout(() => {
 
 OBR.onReady(async () => {
   clearTimeout(obrTimeout);
-  // Migrate old "com.aurora-vtt.aurora/*" keys before anything reads them.
+  // Migrate any superseded-namespace keys before anything reads them.
   // REMOVABLE: see migrateMetadata.ts header comment.
   await migrateMetadata();
 

@@ -13,6 +13,16 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.9.4",
+    date: "2026-08-13",
+    changes: [
+      {
+        type: "change",
+        text: "**Metadata namespace**: Aurora's stored settings now use the standard reverse-domain key format under the hood. Existing Scenes migrate automatically, so nothing changes on your end. Thanks to Citron on Discord for the report.",
+      },
+    ],
+  },
+  {
     version: "0.9.3",
     date: "2026-05-25",
     changes: [

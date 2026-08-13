@@ -22,10 +22,11 @@ import { CONFIG_KEY, LAST_CONFIG_KEY } from "../shared/keys";
 /** Popover height for the Aurora Settings embed (pixels) */
 const SETTINGS_EMBED_HEIGHT = 490;
 
-/** Old namespace context menu IDs left over from before the namespace migration.
- *  REMOVABLE: see migrateMetadata.ts header comment. */
-const OLD_BASE = "com.aurora-vtt.aurora";
-const OLD_MENU_IDS = [`${OLD_BASE}/menu/add`, `${OLD_BASE}/menu/settings`];
+/** Context-menu IDs registered under superseded namespaces, removed so they
+ *  cannot appear alongside the current ones. Mirrors the namespaces migrated
+ *  in migrateMetadata.ts. REMOVABLE: see migrateMetadata.ts header comment. */
+const OLD_MENU_BASES = ["https://aurora.several-record.com", "https://aurora-0nm6.onrender.com"];
+const OLD_MENU_IDS = OLD_MENU_BASES.flatMap((base) => [`${base}/menu/add`, `${base}/menu/settings`]);
 
 export function createAuroraMenu() {
   // Clean up old-namespace menu registrations so they don't appear

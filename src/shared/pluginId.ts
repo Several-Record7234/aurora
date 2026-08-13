@@ -1,7 +1,7 @@
-/** Base namespace for all Aurora metadata keys, matching the hosting URL. */
-const PLUGIN_BASE = "https://aurora.several-record.com";
+/** Base namespace for all Aurora metadata keys (OBR reverse-domain format). */
+const PLUGIN_BASE = "com.several-record.aurora";
 
-/** Returns a namespaced key, e.g. getPluginId("config") → "https://aurora-0nm6.onrender.com/config" */
+/** Returns a namespaced key, e.g. getPluginId("config") → "com.several-record.aurora/config" */
 export function getPluginId(path: string): string {
   return `${PLUGIN_BASE}/${path}`;
 }
