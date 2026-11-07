@@ -27,6 +27,8 @@
 
 ## Recent History
 
+- **2026-11-07 (v0.9.5):** Help-page CSP fix confirmed live (`<script src="help.js" defer>`, byte-identical to local). README + store.md install URL moved off the deprecated Render host to `aurora.several-record.com` (a5c9d1c). **Polygon host sampling fix** (c3e5e37, reported by Jules on Discord): `coordOffset` was `bounds.center - item.position`, sampling ~3x the shape's distance from the world origin away; replaced by Flicker's formula in `polygonCoordOffset`, canvas-verified for a Curve (incl. dragged far), freehand PATH and trimmed/joined PATH. **Edge-sliver fix** (e8d5f44): curve tessellation switched to OBR's length-weighted cubic Bezier (`t = tension`); RDP epsilon bisected to fill the vertex budget, cap 24 -> 32; mask inflated by `maxOutsideDistance` (subtracted from the SDF), safe because OBR clips ATTACHMENT output to a PATH/CURVE host's outline (canvas-verified for both). Changelog + `npm version patch` -> v0.9.5, pushed and confirmed live. `public/404.html` added (18ea2a0): a missing asset now returns `404 no-store`, was a cacheable `200 text/html`. 111 tests.
+
 - **2026-05-25:** v0.9.2 final commit + tag pushed. Serif font bug fixed in What's New modal (`font-family: sans-serif` on `<body>` mapped to serif on Windows — replaced with full system-font stack). Dreamy/crisp correction coverage analysed and documented in CLAUDE.md: lightness correction is exact; saturation is a good approximation (minor divergence at 0% and >100%); hue+opacity not corrected (known limitation at high Multiply opacity).
 - **2026-04-30 (session 3):** What's New modal cosmetic fixes (icon path, font sizes, `position:fixed;inset:0` layout, `overflow-y:scroll`, consistent 360×480 dimensions). What's New link moved from paragraph to How to Use section header (right-justified, stopPropagation). Tailwind migration logged as deferred future consideration. Help page (build-help.js) implemented — all 3 phases: infrastructure, README media pass (11 images, 3 broken mixed-format entries fixed), wiring (manifest + in-app link). Crisp/Dreamy section added to README. All 6 commits pushed to origin/main.
 - **2026-04-30 (session 2):** Shader bug fixed — blur lightness mismatch caused disproportionate bloom/unsharp at l≠100%; fix: `blurred *= lightness` after saturation correction. What's New modal wired end-to-end (auto-trigger + manual link). Manifest description updated to Option B. Left-side chevrons on all section headers. Snapshot updated. 75/75 tests pass.
@@ -43,12 +45,15 @@
 - 5 remaining codebase review recommendations — prioritise or defer? (4.3 server.js ESM, 4.4 DOM patterns, 4.6 non-null assertion, 4.7 beforeunload docs, 4.8 hidden blend mode)
 - POST_PROCESS layer interaction with other extensions (shared concern with faro)
 - Golden Hour preset `d` value — needs empirical testing on real maps before setting non-zero
+- Self-intersecting polygon hosts skip mask inflation (the discarded lobes would bloat it), so they keep thin edge slivers at 0% feather. Accept, or measure against the kept ring only?
 
 ## Next Steps
 
 - [ ] Triage remaining 5 review recommendations (4.3 server.js ESM, 4.4 DOM patterns, 4.6 non-null assertion, 4.7 beforeunload docs, 4.8 hidden blend mode)
 - [ ] Distinguish clearly from aurora.old (archived predecessor)
 - [ ] PATH/CURVE polygon host support — see Feature section below
+- [ ] **Rotated polygon hosts**: never tested. The mask is item-local (rotation-invariant by design); the `coordOffset` formula was only ever fitted and verified at rotation 0. Repro: rotate a Curve host, check both the outline mask and that the graded pixels still register with the map.
+- [ ] **Polygon shader cost at 32 edges**: cap raised from 24 on 2026-11-07, unmeasured. Check frame rate on the slowest device with a large polygon host on screen.
 
 ## Feature: PATH/CURVE Polygon Host Support
 
@@ -320,4 +325,6 @@ All gates green: 101/101 tests, `npm run build` clean. Aurora version remains 0.
 - 2026-11-07 12:45 -- SESSION END: verified + committed the help-page CSP fix (inline <script> -> gitignored public/help.js via build-help.js; <script src defer>); build green, 104 tests, help.js 2467B = portfolio standard; pushed. Outstanding: human browser check + deployed-CSP confirmation (CF-only). NB log gap: the CORS 'any origin' (2872f22) and store.md (15b4baf) commits were made in a different session, so their times are not in this transcript.
 
 - 2026-11-07 12:55 -- SESSION START: confirm the help-page CSP fix on the deployed Cloudflare page; review the CORS + store.md commits that shipped with it
+
+- 2026-11-07 14:15 -- SESSION END: shipped v0.9.5 (PATH/CURVE sampling offset + edge slivers, OBR's curve convention found), CF install URL in docs, 404.html; corpus, Flicker and Snaps notes written (uncommitted in those repos)
 
