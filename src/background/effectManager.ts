@@ -525,8 +525,10 @@ async function buildAuroraEffect(
   // ── PATH / CURVE polygon host ──
   // Per Flicker (c:\Coding\Flicker\src\background\effectManager.ts:247) the
   // effect is positioned at the world AABB centre, rotated by parent rotation
-  // and held at unit scale; ATTACHMENT auto-fill then matches the polygon's
-  // bounding rectangle.
+  // and built at unit scale; ATTACHMENT auto-fill then matches the polygon's
+  // bounding rectangle. SCALE is inherited (unlike Flicker) so the fill tracks
+  // a live resize: dragging a max-x/max-y edge stays aligned, a min-edge drag
+  // still drifts until the rebuild on release (canvas-tested 2026-11-07).
   if (isPolygonHost(parent)) {
     const polyGeom = await getPolygonShaderGeometry(parent);
     if (!polyGeom) return null;
@@ -541,7 +543,7 @@ async function buildAuroraEffect(
       .zIndex(getLayerZIndex(parent))
       .locked(true)
       .disableHit(true)
-      .disableAttachmentBehavior(["COPY", "SCALE"])
+      .disableAttachmentBehavior(["COPY"])
       .build();
 
     effect.sksl = getPolygonShaderCode({
