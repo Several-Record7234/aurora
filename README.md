@@ -23,7 +23,7 @@ Mix and match these parameters to create exactly the atmosphere you're after, th
 Copy the Aurora manifest URL:
 
 ```
-https://aurora-0nm6.onrender.com/manifest.json
+https://aurora.several-record.com/manifest.json
 ```
 
 Then head to your **Owlbear Rodeo Room** → **Extras** → **Extensions** → **+** (Add Custom Extension), paste the URL, and confirm.
