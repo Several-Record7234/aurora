@@ -10,7 +10,7 @@
  * testable in plain Node Vitest.
  */
 
-import type { BoundingBox, Vector2, PathCommand } from "@owlbear-rodeo/sdk";
+import type { Vector2, PathCommand } from "@owlbear-rodeo/sdk";
 
 // PATH command type discriminators — values match the SDK's `Command` enum.
 // Inlined to keep this module free of SDK runtime imports.
@@ -305,28 +305,41 @@ export function maxOutsideDistance(outline: Vector2[], polygon: Vector2[]): numb
  * samples with the map beneath it. The effect must be positioned at the
  * world bounds centre.
  *
- *   coordOffset = bounds.halfSize + 2 * (item.position - bounds.center) + excess
+ *   coordOffset = local.halfSize - 2 * local.center + excess
  *
- * Flicker's empirical PATH formula (c:\Coding\Flicker\progress.md, "PATH
- * Light Geometry — Solved"). Confirmed for CURVE on canvas 2026-11-07: the
- * previous `bounds.center - item.position` sampled ~3x the shape's distance
- * from the world origin away, and this formula predicted the reported
- * displacement to within 46 units. Flicker fitted it with `item.position` near
- * (0,0); the `2 *` term was then confirmed on canvas by dragging a CURVE
- * several thousand units from where it was drawn, alongside a freehand PATH
- * and a trimmed/joined PATH (position != bounds centre). Rotation untested.
+ * where `local` is the AABB of the item-local (pre-rotation) vertices.
+ *
+ * At rotation 0 this is Flicker's empirical PATH formula,
+ * `bounds.halfSize + 2 * (item.position - bounds.center) + excess`
+ * (c:\Coding\Flicker\progress.md, "PATH Light Geometry — Solved"), since the
+ * world bounds are then the local bounds shifted by the position. That form
+ * was confirmed for CURVE on canvas 2026-11-07, including a CURVE dragged
+ * several thousand units and PATHs whose position is not the bounds centre.
+ *
+ * It must be computed in the local frame because `coord` is local: under
+ * rotation, getItemBounds returns the AABB of the rotated local bounding
+ * rectangle, so the world form mixes a frame-dependent box into a local
+ * offset. A CURVE rotated 15 degrees sampled (1170, -135) away on canvas
+ * (2026-11-07); that model predicts (1174, -139) with no fitted terms.
+ * Scale untested.
  */
 export function polygonCoordOffset(
-  bounds: Pick<BoundingBox, "min" | "max">,
-  position: Vector2,
+  localVerts: Vector2[],
   excess: number,
 ): Vector2 {
-  const centre = {
-    x: (bounds.min.x + bounds.max.x) / 2,
-    y: (bounds.min.y + bounds.max.y) / 2,
-  };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const v of localVerts) {
+    if (v.x < minX) minX = v.x;
+    if (v.x > maxX) maxX = v.x;
+    if (v.y < minY) minY = v.y;
+    if (v.y > maxY) maxY = v.y;
+  }
+  if (minX > maxX) return { x: excess, y: excess };
   return {
-    x: (bounds.max.x - bounds.min.x) / 2 + 2 * (position.x - centre.x) + excess,
-    y: (bounds.max.y - bounds.min.y) / 2 + 2 * (position.y - centre.y) + excess,
+    x: (maxX - minX) / 2 - (minX + maxX) + excess,
+    y: (maxY - minY) / 2 - (minY + maxY) + excess,
   };
 }

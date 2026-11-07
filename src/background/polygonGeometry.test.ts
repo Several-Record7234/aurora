@@ -266,13 +266,55 @@ describe("tessellatePathCurve convention", () => {
 });
 
 describe("polygonCoordOffset", () => {
-  it("reduces to halfSize + excess when position is the bounds centre (primitive-derived PATH)", () => {
+  it("reduces to halfSize + excess when the local verts are centred on the origin (primitive-derived PATH)", () => {
     const offset = polygonCoordOffset(
-      { min: { x: 100, y: 200 }, max: { x: 300, y: 600 } },
-      { x: 200, y: 400 },
+      [{ x: -100, y: -200 }, { x: 100, y: 0 }, { x: 0, y: 200 }],
       12,
     );
     expect(offset).toEqual({ x: 112, y: 212 });
+  });
+
+  // At rotation 0 the world bounds are the local bounds shifted by the
+  // position, so the local form must reproduce the canvas-verified world form.
+  it("equals the world-bounds form at rotation 0 for any position", () => {
+    const local = [{ x: 898.3, y: 644.57 }, { x: 1770.65, y: 1697.85 }, { x: 1000, y: 1200 }];
+    const position = { x: -3210.5, y: 4870.25 };
+    const min = { x: 898.3 + position.x, y: 644.57 + position.y };
+    const max = { x: 1770.65 + position.x, y: 1697.85 + position.y };
+    const centre = { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2 };
+    const offset = polygonCoordOffset(local, 12);
+    expect(offset.x).toBeCloseTo((max.x - min.x) / 2 + 2 * (position.x - centre.x) + 12, 6);
+    expect(offset.y).toBeCloseTo((max.y - min.y) / 2 + 2 * (position.y - centre.y) + 12, 6);
+  });
+
+  // Reproduction from 2026-11-07: a closed CURVE (control-point local AABB
+  // below) rotated 15 degrees clockwise sampled the scene (1170, -135) away
+  // under the world-bounds form. getItemBounds returns the AABB of the rotated
+  // local rectangle; modelView rotates the offset error into world space.
+  it("accounts for the canvas-measured misregistration of the world-bounds form under rotation", () => {
+    const lMin = { x: 662.04, y: 1103.31 };
+    const lMax = { x: 2133.68, y: 2280.87 };
+    const local = [lMin, lMax];
+    const theta = (15 * Math.PI) / 180;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    const rotate = (v: { x: number; y: number }) => ({
+      x: v.x * cos - v.y * sin,
+      y: v.x * sin + v.y * cos,
+    });
+    const h = { x: (lMax.x - lMin.x) / 2, y: (lMax.y - lMin.y) / 2 };
+    const c = { x: (lMin.x + lMax.x) / 2, y: (lMin.y + lMax.y) / 2 };
+    // World bounds relative to item.position: rotated rectangle's AABB.
+    const worldHalf = { x: cos * h.x + sin * h.y, y: sin * h.x + cos * h.y };
+    const worldCentre = rotate(c);
+    const oldOffset = {
+      x: worldHalf.x - 2 * worldCentre.x + 12,
+      y: worldHalf.y - 2 * worldCentre.y + 12,
+    };
+    const offset = polygonCoordOffset(local, 12);
+    const error = rotate({ x: oldOffset.x - offset.x, y: oldOffset.y - offset.y });
+    expect(Math.abs(error.x - 1170)).toBeLessThan(25);
+    expect(Math.abs(error.y - -135)).toBeLessThan(25);
   });
 
   // Reproduction from 2026-11-07: a closed CURVE drawn at world coords then
@@ -292,7 +334,10 @@ describe("polygonCoordOffset", () => {
       y: (bounds.min.y + bounds.max.y) / 2,
     };
     const oldOffset = { x: centre.x - position.x, y: centre.y - position.y };
-    const offset = polygonCoordOffset(bounds, position, 12);
+    const offset = polygonCoordOffset(
+      [{ x: 898.3, y: 644.57 }, { x: 1770.65, y: 1697.85 }],
+      12,
+    );
 
     const sampledByOld = {
       x: centre.x + oldOffset.x - offset.x,

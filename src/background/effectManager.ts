@@ -381,7 +381,7 @@ interface PolygonShaderGeometry {
  *   2. Clean (Clipper offset=0) and simplify to <= POLYGON_MAX_VERTICES.
  *   3. Look up world-space AABB via OBR.scene.items.getItemBounds (this
  *      already accounts for item position/rotation/scale).
- *   4. Compute coordOffset using the Flicker PATH formula (see
+ *   4. Compute coordOffset from the item-local verts (see
  *      polygonCoordOffset for what has and has not been verified).
  *   5. Transform vertices into the shader's correctedCoord frame.
  *   6. Look up or compute the inradius (cached by vertex hash; ~12 ms cold,
@@ -438,12 +438,9 @@ async function getPolygonShaderGeometry(
     y: (bounds.min.y + bounds.max.y) / 2,
   };
   // Only affects where scene.eval samples; the feather mask uses raw `coord`.
-  // Unverified under rotation, where modelView also rotates `corrected`.
-  const coordOffset = polygonCoordOffset(
-    bounds,
-    item.position,
-    SHAPE_BOUNDS_EXCESS,
-  );
+  // Computed from the item-local verts, not the world bounds, so it holds
+  // under rotation (see polygonCoordOffset).
+  const coordOffset = polygonCoordOffset(localVerts, SHAPE_BOUNDS_EXCESS);
 
   // polyCentre lives in the item-local frame (rotation-invariant) so the
   // shader can subtract it from `coord` (also item-local) and land in the
