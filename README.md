@@ -49,6 +49,8 @@ Select and right-click any item on the **Map layer** and choose **Add Aurora** f
 
 **💡 Pro tip:** Want to affect multiple maps with a single effect, or shape the mood to an irregular region? Draw any shape — a rectangle, a freehand path, or a closed curve — on the **Drawing** layer, move it to the **Map** layer, then **Add Aurora** to it. Aurora now follows the exact polygon boundary, so the feather fade respects the real edge of whatever you've drawn rather than a bounding box.
 
+**Note:** While resizing a curve or polygon from its top or left edge, the effect may briefly lag the shape; it realigns when you release.
+
 ### 4. Adjust The Settings
 
 After adding Aurora, right-click the same item again and choose **Aurora Settings**. This opens the control panel where you can tweak all four **Saturation**, **Lightness**, **Hue**, and **Opacity** sliders and preview their changes, and those parameters are set for everyone soon as you release them.
