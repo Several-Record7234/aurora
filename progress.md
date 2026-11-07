@@ -1,6 +1,8 @@
 # Aurora — Progress
 
-## Current State (v0.9.2, last updated 2026-04-30)
+## Current State (v0.9.6, last updated 2026-11-07)
+
+- **Polygon hosts aligned at any rotation, fill and stroke; live resize partially** (min-edge drags drift until release). See Recent History.
 
 - GPU shader colour grading on POST_PROCESS layer working
 - Controls: saturation, lightness, hue, opacity, crisp/dreamy
@@ -27,6 +29,8 @@
 
 ## Recent History
 
+- **2026-11-07 (v0.9.6):** **Rotated Curve/Path hosts** (cceb4b5): `coordOffset` now computed from the item-local verts (`halfSize - 2*centre + excess`); under rotation `getItemBounds` returns the AABB of the rotated local rectangle, and that model predicted the measured (1170, -135) misregistration as (1174, -139) with no fitted terms. Verified at 0, +/-15 and 45 degrees; tracks live during a rotate. Forms' `rotateScale` independently confirms the matrix and sign. **Live resize** (65fe8cc): dropped `"SCALE"` from the polygon effect's `disableAttachmentBehavior`; max-edge drags now track live, min-edge drags drift by exactly the edge's displacement (opposite direction) until release, noted in the README (b4fad8f). **Filled drawn hosts** (e149d87): excess is `strokeWidth/2` when fill > 0, 12 when unfilled, for all six drawn types via `drawnHostExcess`; fill and stroke feed the snapshot. Changelog + `npm version patch` -> v0.9.6, tagged and pushed. 113 tests. Flicker's `progress.md` carries the same findings (uncommitted on `spike/particles`).
+
 - **2026-11-07 (v0.9.5):** Help-page CSP fix confirmed live (`<script src="help.js" defer>`, byte-identical to local). README + store.md install URL moved off the deprecated Render host to `aurora.several-record.com` (a5c9d1c). **Polygon host sampling fix** (c3e5e37, reported by Jules on Discord): `coordOffset` was `bounds.center - item.position`, sampling ~3x the shape's distance from the world origin away; replaced by Flicker's formula in `polygonCoordOffset`, canvas-verified for a Curve (incl. dragged far), freehand PATH and trimmed/joined PATH. **Edge-sliver fix** (e8d5f44): curve tessellation switched to OBR's length-weighted cubic Bezier (`t = tension`); RDP epsilon bisected to fill the vertex budget, cap 24 -> 32; mask inflated by `maxOutsideDistance` (subtracted from the SDF), safe because OBR clips ATTACHMENT output to a PATH/CURVE host's outline (canvas-verified for both). Changelog + `npm version patch` -> v0.9.5, pushed and confirmed live. `public/404.html` added (18ea2a0): a missing asset now returns `404 no-store`, was a cacheable `200 text/html`. 111 tests.
 
 - **2026-05-25:** v0.9.2 final commit + tag pushed. Serif font bug fixed in What's New modal (`font-family: sans-serif` on `<body>` mapped to serif on Windows — replaced with full system-font stack). Dreamy/crisp correction coverage analysed and documented in CLAUDE.md: lightness correction is exact; saturation is a good approximation (minor divergence at 0% and >100%); hue+opacity not corrected (known limitation at high Multiply opacity).
@@ -45,14 +49,15 @@
 - 5 remaining codebase review recommendations — prioritise or defer? (4.3 server.js ESM, 4.4 DOM patterns, 4.6 non-null assertion, 4.7 beforeunload docs, 4.8 hidden blend mode)
 - POST_PROCESS layer interaction with other extensions (shared concern with faro)
 - Golden Hour preset `d` value — needs empirical testing on real maps before setting non-zero
+- Why the drawn-host excess is 12 unfilled and `strokeWidth/2` filled (OBR bounds or attachment-fill convention): unknown, only measured.
 - Self-intersecting polygon hosts skip mask inflation (the discarded lobes would bloat it), so they keep thin edge slivers at 0% feather. Accept, or measure against the kept ring only?
 
 ## Next Steps
 
 - [ ] Triage remaining 5 review recommendations (4.3 server.js ESM, 4.4 DOM patterns, 4.6 non-null assertion, 4.7 beforeunload docs, 4.8 hidden blend mode)
 - [ ] Distinguish clearly from aurora.old (archived predecessor)
-- [ ] PATH/CURVE polygon host support — see Feature section below
-- [ ] **Rotated polygon hosts**: never tested. The mask is item-local (rotation-invariant by design); the `coordOffset` formula was only ever fitted and verified at rotation 0. Repro: rotate a Curve host, check both the outline mask and that the graded pixels still register with the map.
+- [x] **Rotated polygon hosts**: fixed and canvas-verified 2026-11-07 (cceb4b5).
+- [ ] **Unfilled hosts at stroke 0 and max**: the 12 excess is inferred there, not measured (fill tests did not record stroke). Low priority.
 - [ ] **Polygon shader cost at 32 edges**: cap raised from 24 on 2026-11-07, unmeasured. Check frame rate on the slowest device with a large polygon host on screen.
 
 ## Feature: PATH/CURVE Polygon Host Support
@@ -328,3 +333,6 @@ All gates green: 101/101 tests, `npm run build` clean. Aurora version remains 0.
 
 - 2026-11-07 14:15 -- SESSION END: shipped v0.9.5 (PATH/CURVE sampling offset + edge slivers, OBR's curve convention found), CF install URL in docs, 404.html; corpus, Flicker and Snaps notes written (uncommitted in those repos)
 
+
+- 2026-11-07 14:23 -- SESSION START: resume from the 0.9.5 handoff; pick the next open item
+- 2026-11-07 16:18 -- SESSION END: v0.9.6 shipped (rotated Curve/Path alignment, live resize via SCALE inheritance, fill-dependent excess for all drawn hosts); Flicker progress.md notes written (uncommitted)
