@@ -16,6 +16,7 @@ exports[`getPolygonShaderCode > triangle shader is stable (snapshot) 1`] = `
     uniform float bloomThreshold;
 
     const float polyInradius = 2.5000;
+    const float polyInflate = 0.0000;
     const vec2 polyCentre = vec2(0.0000, 0.0000);
 
     const vec2 p0 = vec2(0.0000, 0.0000);
@@ -107,7 +108,8 @@ exports[`getPolygonShaderCode > triangle shader is stable (snapshot) 1`] = `
     // the drawn polygon. At feather>0 the inward fade depth is normalised by
     // the polygon's inradius — feather=1 fills the entire interior.
     float computeFeather(vec2 localCoord) {
-      float sdf = sdPolygon(localCoord);
+      // Subtracting polyInflate is an exact rounded offset of the polygon.
+      float sdf = sdPolygon(localCoord) - polyInflate;
       float fade;
       if (feather <= 0.0) {
         fade = step(0.0, -sdf);

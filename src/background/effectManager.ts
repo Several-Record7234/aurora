@@ -43,6 +43,7 @@ import {
   aabbCentre,
   hashVertices,
   polygonCoordOffset,
+  maxOutsideDistance,
 } from "./polygonGeometry";
 
 /** True iff this item is a candidate polygon host (PATH or closed CURVE). */
@@ -369,6 +370,7 @@ interface PolygonShaderGeometry {
   polyCentre: Vector2;
   shaderLocalVerts: Vector2[];
   inradius: number;
+  inflate: number;
 }
 
 /**
@@ -451,12 +453,20 @@ async function getPolygonShaderGeometry(
   const shaderLocalVerts = recentre(simplified, localCentre);
   const inradius = getCachedInradius(shaderLocalVerts);
 
+  // Grow the mask to contain the true outline, so the chords cut no
+  // ungraded slivers inside convex bulges. Safe because OBR clips an
+  // ATTACHMENT's output to a CURVE or PATH host's outline (canvas-verified
+  // 2026-11-07), so the excess never shows. Skipped for self-intersecting
+  // input: the discarded lobes' points would inflate it by their full size.
+  const inflate = rings > 1 ? 0 : maxOutsideDistance(localVerts, simplified);
+
   return {
     coordOffset,
     boundsCenter,
     polyCentre: localCentre,
     shaderLocalVerts,
     inradius,
+    inflate,
   };
 }
 
@@ -540,6 +550,7 @@ async function buildAuroraEffect(
     effect.sksl = getPolygonShaderCode({
       vertices: polyGeom.shaderLocalVerts,
       inradius: polyGeom.inradius,
+      inflate: polyGeom.inflate,
       polyCentre: polyGeom.polyCentre,
     });
     effect.uniforms = getPolygonShaderUniforms(

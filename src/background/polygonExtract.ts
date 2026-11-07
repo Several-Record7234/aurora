@@ -119,13 +119,44 @@ export function extractPathVertices(commands: PathCommand[]): Vector2[] {
   return pts;
 }
 
-const CURVE_SAMPLES_PER_SPAN = 8;
+// 16 rather than 8 so the tessellation follows the sharp mid-span kinks that
+// high tensions produce; the sliver inflation is only as good as this outline.
+const CURVE_SAMPLES_PER_SPAN = 16;
 
 /**
- * Tessellate an OBR CURVE (cardinal spline) to a closed polygon of world-space
- * vertices. `tension === 0` => control points returned verbatim after the
- * item transform. `tension > 0` => evaluate a Catmull-Rom-style cardinal
- * spline with CURVE_SAMPLES_PER_SPAN interior samples per span.
+ * Bezier handles either side of anchor `b`, scaled by tension and by the
+ * lengths of the two edges meeting there (the longer edge gets the longer
+ * handle). Both lie along (c - a).
+ */
+function curveHandles(
+  a: Vector2,
+  b: Vector2,
+  c: Vector2,
+  tension: number,
+): { incoming: Vector2; outgoing: Vector2 } {
+  const d01 = Math.hypot(b.x - a.x, b.y - a.y);
+  const d12 = Math.hypot(c.x - b.x, c.y - b.y);
+  const total = d01 + d12;
+  const fa = total > 0 ? (tension * d01) / total : 0;
+  const fb = total > 0 ? (tension * d12) / total : 0;
+  return {
+    incoming: { x: b.x - fa * (c.x - a.x), y: b.y - fa * (c.y - a.y) },
+    outgoing: { x: b.x + fb * (c.x - a.x), y: b.y + fb * (c.y - a.y) },
+  };
+}
+
+/**
+ * Tessellate a closed OBR CURVE to a polygon of item-local vertices.
+ * `tension === 0` => control points returned verbatim (OBR draws straight
+ * sides). `tension > 0` => each span is a cubic Bezier whose handles are
+ * length-weighted (curveHandles), sampled CURVE_SAMPLES_PER_SPAN times.
+ *
+ * Convention matched to OBR's rendering on canvas, 2026-11-07, by two
+ * independent tests on the same 25-anchor curve: it predicted the position
+ * and ranking of both residual slivers at 25% tension (to ~10 units), and it
+ * puts a near-cusp at the midpoint of 24 of 25 spans at 100%, matching the
+ * "spiny" mid-span kinks OBR draws there. The previous uniform cardinal
+ * spline (tangent = tension/2 * (p2 - p0)) produced neither.
  *
  * Callers must only invoke this for closed curves (style.closed === true);
  * open curves have no enclosed area.
@@ -141,27 +172,28 @@ export function tessellatePathCurve(
     return points.map((p) => ({ x: p.x, y: p.y }));
   }
 
-  const s = 0.5 * tension;
+  const handles = points.map((p, i) =>
+    curveHandles(points[(i - 1 + n) % n], p, points[(i + 1) % n], tension),
+  );
   const out: Vector2[] = [];
 
   for (let i = 0; i < n; i++) {
-    const p0 = points[(i - 1 + n) % n];
     const p1 = points[i];
     const p2 = points[(i + 1) % n];
-    const p3 = points[(i + 2) % n];
+    const c1 = handles[i].outgoing;
+    const c2 = handles[(i + 1) % n].incoming;
 
     out.push({ x: p1.x, y: p1.y });
     for (let k = 1; k < CURVE_SAMPLES_PER_SPAN; k++) {
       const u = k / CURVE_SAMPLES_PER_SPAN;
-      const u2 = u * u;
-      const u3 = u2 * u;
-      const b0 = -s * u3 + 2 * s * u2 - s * u;
-      const b1 = (2 - s) * u3 + (s - 3) * u2 + 1;
-      const b2 = (s - 2) * u3 + (3 - 2 * s) * u2 + s * u;
-      const b3 = s * u3 - s * u2;
+      const v = 1 - u;
+      const w0 = v * v * v;
+      const w1 = 3 * v * v * u;
+      const w2 = 3 * v * u * u;
+      const w3 = u * u * u;
       out.push({
-        x: b0 * p0.x + b1 * p1.x + b2 * p2.x + b3 * p3.x,
-        y: b0 * p0.y + b1 * p1.y + b2 * p2.y + b3 * p3.y,
+        x: w0 * p1.x + w1 * c1.x + w2 * c2.x + w3 * p2.x,
+        y: w0 * p1.y + w1 * c1.y + w2 * c2.y + w3 * p2.y,
       });
     }
   }
@@ -232,6 +264,40 @@ export function hashVertices(verts: Vector2[]): string {
     h = Math.imul(h, 0x01000193);
   }
   return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * Largest distance by which any of `outline` lies OUTSIDE `polygon`: the
+ * widest sliver between a host's true outline and its simplified polygon's
+ * chords. Growing the shader's mask by this much guarantees it contains the
+ * whole outline. Points inside the polygon contribute nothing.
+ *
+ * O(outline x polygon); a few hundred x 32 per rebuild, never per frame.
+ */
+export function maxOutsideDistance(outline: Vector2[], polygon: Vector2[]): number {
+  const n = polygon.length;
+  let worst = 0;
+  for (const p of outline) {
+    let inside = false;
+    let nearest = Infinity;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const a = polygon[i];
+      const b = polygon[j];
+      if ((a.y > p.y) !== (b.y > p.y) &&
+          p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
+        inside = !inside;
+      }
+      const ex = b.x - a.x;
+      const ey = b.y - a.y;
+      const len2 = ex * ex + ey * ey;
+      const t = len2 > 0
+        ? Math.max(0, Math.min(1, ((p.x - a.x) * ex + (p.y - a.y) * ey) / len2))
+        : 0;
+      nearest = Math.min(nearest, Math.hypot(p.x - a.x - ex * t, p.y - a.y - ey * t));
+    }
+    if (!inside) worst = Math.max(worst, nearest);
+  }
+  return worst;
 }
 
 /**

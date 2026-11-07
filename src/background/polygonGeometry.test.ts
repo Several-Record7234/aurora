@@ -21,6 +21,7 @@ import {
   aabbCentre,
   hashVertices,
   polygonCoordOffset,
+  maxOutsideDistance,
 } from "./polygonGeometry";
 
 describe("cleanAndSimplify", () => {
@@ -207,6 +208,60 @@ describe("hashVertices", () => {
     const a = [{ x: 1.00, y: 2.00 }];
     const b = [{ x: 1.001, y: 1.999 }];
     expect(hashVertices(a)).toBe(hashVertices(b));
+  });
+});
+
+// Control points of the 2026-11-07 repro CURVE (tension 0.25), item-local.
+const REPRO_CURVE_POINTS = [
+  [1680.48, 741.76], [1443.8, 658.13], [1286.01, 644.57], [1189.08, 655.87],
+  [1107.93, 707.85], [1053.83, 768.88], [916.33, 967.78], [898.3, 1064.97],
+  [907.32, 1135.04], [995.23, 1268.4], [1098.92, 1485.38], [1209.37, 1609.7],
+  [1290.52, 1659.42], [1565.52, 1697.85], [1671.47, 1648.12], [1736.84, 1573.53],
+  [1750.36, 1541.89], [1770.65, 1469.56], [1768.39, 1263.88], [1741.34, 1196.07],
+  [1736.84, 1058.19], [1698.52, 1008.47], [1563.27, 965.52], [1545.23, 899.98],
+  [1583.55, 800.52],
+].map(([x, y]) => ({ x, y }));
+
+describe("maxOutsideDistance", () => {
+  const square = [
+    { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 },
+  ];
+
+  it("is 0 when the outline lies inside the polygon", () => {
+    expect(maxOutsideDistance([{ x: 5, y: 5 }, { x: 1, y: 9 }], square)).toBe(0);
+  });
+
+  it("is the distance of the furthest outside point to the nearest edge", () => {
+    const d = maxOutsideDistance([{ x: 5, y: -3 }, { x: 12, y: 5 }], square);
+    expect(d).toBeCloseTo(3, 6);
+  });
+});
+
+describe("cleanAndSimplify budget use", () => {
+  // Regression: geometric epsilon growth left the repro curve at 20 of 24
+  // vertices, with chords cutting 13-unit ungraded slivers inside its bulges.
+  // The shader inflates by the residual (~4 units here), so it only has to be
+  // small enough that the mask's outward growth stays unnoticeable.
+  it("fills the vertex budget on the repro curve and keeps the sliver small", () => {
+    const dense = tessellatePathCurve(REPRO_CURVE_POINTS, 0.25);
+    const { vertices } = cleanAndSimplify(dense, 32);
+    expect(vertices.length).toBe(32);
+    expect(maxOutsideDistance(dense, vertices)).toBeLessThan(5);
+  });
+});
+
+describe("tessellatePathCurve convention", () => {
+  // Span (0,0) -> (10,0) of a 10-unit square at tension 1: both handles are
+  // tension/2 of the 10x10 diagonal, so the Bezier midpoint is (5, -3.75).
+  // The previous uniform cardinal spline put it at (5, -1.25).
+  it("uses length-weighted Bezier handles, matching OBR's rendering", () => {
+    const square = [
+      { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 },
+    ];
+    const pts = tessellatePathCurve(square, 1);
+    const mid = pts[pts.length / square.length / 2];
+    expect(mid.x).toBeCloseTo(5, 6);
+    expect(mid.y).toBeCloseTo(-3.75, 6);
   });
 });
 

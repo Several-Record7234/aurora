@@ -31,6 +31,7 @@ export {
   aabbCentre,
   hashVertices,
   polygonCoordOffset,
+  maxOutsideDistance,
 } from "./polygonExtract";
 
 // Clipper2 operates on int64 coords; multiply floats by SCALE on input and
@@ -75,8 +76,8 @@ function path64ToVerts(path: Path64): Vector2[] {
  *
  * 1. `Clipper.InflatePaths` with delta = 0 normalises winding and removes
  *    self-intersections. Required: OBR freehand strokes can be dirty.
- * 2. If still over budget, run RDP with progressively larger epsilon until
- *    the vertex count fits (or 20 iterations elapse — safety bound).
+ * 2. If still over budget, bisect RDP's epsilon for the largest vertex count
+ *    that fits (30 iterations), falling back to uniform decimation.
  *
  * Returns the original vertices on Clipper degenerate result, so callers
  * never get an empty polygon from a non-degenerate input.
@@ -142,13 +143,25 @@ export function cleanAndSimplify(
     if (p.y > maxY) maxY = p.y;
   }
   const diam = Math.hypot(maxX - minX, maxY - minY) || CLIPPER_SCALE;
-  let eps = diam * 0.001;
 
+  // Bisect for the smallest epsilon that fits the budget, so the result uses
+  // as much of it as RDP allows. Growing epsilon geometrically overshot (20 of
+  // 24 vertices on a real curve), and every unused vertex widens the sliver
+  // between the true outline and the polygon's chords.
   let current: Path64 = working;
-  for (let iter = 0; iter < 30 && current.length > maxVerts; iter++) {
-    const next = Clipper.ramerDouglasPeucker(current, eps);
-    if (next && next.length >= 3) current = next;
-    eps *= 1.6;
+  let lo = 0;
+  let hi = diam;
+  for (let iter = 0; iter < 30; iter++) {
+    const eps = (lo + hi) / 2;
+    const next = Clipper.ramerDouglasPeucker(working, eps);
+    if (next && next.length >= 3 && next.length <= maxVerts) {
+      current = next;
+      hi = eps;
+    } else if (next && next.length > maxVerts) {
+      lo = eps;
+    } else {
+      hi = eps;
+    }
   }
 
   // Hard guarantee: if RDP can't satisfy the budget (e.g. a near-circular spline

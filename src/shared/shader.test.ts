@@ -267,6 +267,7 @@ describe("getPolygonShaderCode", () => {
       { x: 5, y: 8 },
     ],
     inradius: 2.5,
+    inflate: 0,
     polyCentre: { x: 0, y: 0 },
   };
 
@@ -286,6 +287,13 @@ describe("getPolygonShaderCode", () => {
   it("bakes inradius as a const float", () => {
     const code = getPolygonShaderCode(TRIANGLE);
     expect(code).toContain("const float polyInradius = 2.5000");
+  });
+
+  it("grows the mask by inflate and widens the feather depth to match", () => {
+    const code = getPolygonShaderCode({ ...TRIANGLE, inflate: 1.25 });
+    expect(code).toContain("const float polyInflate = 1.2500");
+    expect(code).toContain("const float polyInradius = 3.7500");
+    expect(code).toContain("float sdf = sdPolygon(localCoord) - polyInflate;");
   });
 
   it("declares the polygon SDF function", () => {
@@ -323,6 +331,7 @@ describe("getPolygonShaderCode", () => {
           { x: 1, y: 1 },
         ],
         inradius: 0,
+        inflate: 0,
         polyCentre: { x: 0, y: 0 },
       }),
     ).toThrow();
@@ -337,6 +346,7 @@ describe("getPolygonShaderCode", () => {
       getPolygonShaderCode({
         vertices: verts,
         inradius: 0,
+        inflate: 0,
         polyCentre: { x: 0, y: 0 },
       }),
     ).toThrow();

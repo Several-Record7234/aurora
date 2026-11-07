@@ -44,7 +44,7 @@ export const SHAPE_TYPE_HEXAGON = 3;
 export const SHAPE_TYPE_POLYGON = 4;
 
 /** Maximum vertex count for polygon host shaders (post-simplification). */
-export const POLYGON_MAX_VERTICES = 24;
+export const POLYGON_MAX_VERTICES = 32;
 
 export interface ShaderGeometry {
   coordOffset: { x: number; y: number };
@@ -404,6 +404,9 @@ export interface PolygonShaderData {
   vertices: { x: number; y: number }[];
   /** Largest inscribed circle radius in pixels; used to normalise feather. */
   inradius: number;
+  /** Distance the mask is grown past the polygon's edges so it contains the
+   *  host's true outline (see maxOutsideDistance). 0 = mask is the polygon. */
+  inflate: number;
   /** Item-local AABB centre. Subtracted from `coord` (also item-local) in the
    *  shader so the SDF eval point lands in the AABB-centred vert frame.
    *  Rotation-invariant — item-local doesn't change when parent rotates. */
@@ -488,7 +491,9 @@ export function getPolygonShaderCode(poly: PolygonShaderData): string {
   }
 
   const sdfBlock = emitPolygonSdf(poly.vertices);
-  const inradiusLit = flit(Math.max(poly.inradius, 0));
+  const inflate = Math.max(poly.inflate, 0);
+  const inradiusLit = flit(Math.max(poly.inradius, 0) + inflate);
+  const inflateLit = flit(inflate);
   const polyCentreLit = `vec2(${flit(poly.polyCentre.x)}, ${flit(poly.polyCentre.y)})`;
 
   return `
@@ -506,6 +511,7 @@ export function getPolygonShaderCode(poly: PolygonShaderData): string {
     uniform float bloomThreshold;
 
     const float polyInradius = ${inradiusLit};
+    const float polyInflate = ${inflateLit};
     const vec2 polyCentre = ${polyCentreLit};
 
 ${sdfBlock}
@@ -562,7 +568,8 @@ ${sdfBlock}
     // the drawn polygon. At feather>0 the inward fade depth is normalised by
     // the polygon's inradius — feather=1 fills the entire interior.
     float computeFeather(vec2 localCoord) {
-      float sdf = sdPolygon(localCoord);
+      // Subtracting polyInflate is an exact rounded offset of the polygon.
+      float sdf = sdPolygon(localCoord) - polyInflate;
       float fade;
       if (feather <= 0.0) {
         fade = step(0.0, -sdf);
