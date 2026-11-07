@@ -13,6 +13,24 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.9.6",
+    date: "2026-11-07",
+    changes: [
+      {
+        type: "fix",
+        text: "**Rotated polygon hosts**: Aurora on a *rotated* Curve or Path object now grades the map directly beneath the shape at any angle, and stays aligned while you rotate it. Previously a rotated shape wrongly sampled pixels from elsewhere in the Scene.",
+      },
+      {
+        type: "fix",
+        text: "**Resizing polygon hosts**: the effect now follows a Curve or Path object while you drag-resize it from its right edge, bottom edge, or bottom-right corner, instead of only catching up when you release. Resizing from the top or left edge may still lag briefly, but it always realigns on release.",
+      },
+      {
+        type: "fix",
+        text: "**Filled shape alignment**: the effect on any drawn shape with a *non-zero* fill (Rectangle, Ellipse, Triangle, Hexagon, Curve, or Path) no longer sits a few pixels up and to the left of the map beneath it, at any stroke width.",
+      },
+    ],
+  },
+  {
     version: "0.9.5",
     date: "2026-11-07",
     changes: [
