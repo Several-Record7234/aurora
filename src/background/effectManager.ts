@@ -19,7 +19,7 @@
  */
 
 import OBR, { buildEffect, Effect, Item, isShape, isPath } from "@owlbear-rodeo/sdk";
-import type { Curve, Path, Vector2 } from "@owlbear-rodeo/sdk";
+import type { Curve, Path, Shape, Vector2 } from "@owlbear-rodeo/sdk";
 import {
   getShaderCode,
   getShaderUniforms,
@@ -116,7 +116,9 @@ function notifySelfIntersect(itemId: string): void {
  * freehand strokes have a few hundred commands, well below the cost of
  * a single getItemBounds round-trip. */
 function effectSnapshot(config: AuroraConfig, item: Item): string {
-  const strokeWidth = isShape(item) ? (item.style.strokeWidth ?? 0) : 0;
+  const strokeWidth = isShape(item) || isPolygonHost(item)
+    ? ((item as Path | Curve).style?.strokeWidth ?? 0)
+    : 0;
   const shapeW = isShape(item) ? item.width : 0;
   const shapeH = isShape(item) ? item.height : 0;
   const shapeType = isShape(item) ? item.shapeType : "";
@@ -130,6 +132,10 @@ function effectSnapshot(config: AuroraConfig, item: Item): string {
       JSON.stringify(curve.points) +
       "|" + (curve.style?.tension ?? 0) +
       "|" + (curve.style?.closed ?? false);
+  }
+  // Fill on/off switches the coordOffset excess (see drawnHostExcess).
+  if (isShape(item) || isPolygonHost(item)) {
+    geometryFp += "|" + (((item as Shape | Path | Curve).style?.fillOpacity ?? 0) > 0);
   }
 
   return JSON.stringify([
@@ -199,17 +205,17 @@ async function removeAllEffects(): Promise<void> {
  *   TRIANGLE:  origin at top of bounding box — +1× w, no y correction
  *   HEXAGON:   pointy-top; x = sqrt(3)/2 × w (flat-to-flat), y = 1× h
  *
- * All shapes share the same bounds excess of 12 scene units, which
- * accounts for selection handle padding in getItemBounds().
+ * All shapes share the same bounds excess, which depends on fill: see
+ * drawnHostExcess.
  */
 
 interface ShapeCorrection {
-  excess: number;  // Bounds excess to subtract (handle padding)
   mx: number;      // Width multiplier for x offset
   my: number;      // Height multiplier for y offset
 }
 
-/** Bounds excess common to all shape types (selection handle padding) */
+/** Bounds excess for an UNFILLED drawn host, measured on canvas. Why it is
+ *  12 is not established; see drawnHostExcess for the filled case. */
 const SHAPE_BOUNDS_EXCESS = 12;
 
 // ── Layer-based Z-Index ───────────────────────────────────────────
@@ -272,11 +278,25 @@ function getLayerZIndex(parent: Item): number {
   return priority * LAYER_BAND_SIZE + withinBand;
 }
 
+/**
+ * Bounds excess for a drawn host (SHAPE, CURVE or PATH). SHAPE_BOUNDS_EXCESS
+ * holds only while the host is unfilled: with any fill opacity, every drawn
+ * type (all four SHAPE types, CURVE and PATH) sampled ~(12 - strokeWidth/2)
+ * up-left of true in its own frame, and is aligned with half its stroke
+ * (canvas, 2026-11-07, strokes 0 to max, filled and unfilled).
+ */
+function drawnHostExcess(item: Item): number {
+  const style = (item as Shape | Path | Curve).style;
+  return (style?.fillOpacity ?? 0) > 0
+    ? (style?.strokeWidth ?? 0) / 2
+    : SHAPE_BOUNDS_EXCESS;
+}
+
 const SHAPE_CORRECTIONS: Record<string, ShapeCorrection> = {
-  RECTANGLE: { excess: SHAPE_BOUNDS_EXCESS, mx: 0,     my: 0 },
-  CIRCLE:    { excess: SHAPE_BOUNDS_EXCESS, mx: 1,     my: 1 },
-  TRIANGLE:  { excess: SHAPE_BOUNDS_EXCESS, mx: 1,     my: 0 },
-  HEXAGON:   { excess: SHAPE_BOUNDS_EXCESS, mx: 0.866, my: 1 },  // sqrt(3)/2 ≈ 0.866
+  RECTANGLE: { mx: 0,     my: 0 },
+  CIRCLE:    { mx: 1,     my: 1 },
+  TRIANGLE:  { mx: 1,     my: 0 },
+  HEXAGON:   { mx: 0.866, my: 1 },  // sqrt(3)/2 ≈ 0.866
 };
 
 /** Map OBR shapeType strings to shader shapeType indices */
@@ -302,20 +322,21 @@ async function getShaderGeometry(item: Item): Promise<ShaderGeometry> {
       const bounds = await OBR.scene.items.getItemBounds([item.id]);
       const obrShapeType = item.shapeType ?? "RECTANGLE";
       const corr = SHAPE_CORRECTIONS[obrShapeType] ?? SHAPE_CORRECTIONS.RECTANGLE;
+      const excess = drawnHostExcess(item);
 
       const coordOffset = {
-        x: -(item.position.x - bounds.min.x - corr.excess) + corr.mx * item.width,
-        y: -(item.position.y - bounds.min.y - corr.excess) + corr.my * item.height,
+        x: -(item.position.x - bounds.min.x - excess) + corr.mx * item.width,
+        y: -(item.position.y - bounds.min.y - excess) + corr.my * item.height,
       };
 
       // Shader coord space size for feather calculations.
-      // The ATTACHMENT fill area extends corr.excess beyond the getItemBounds()
+      // The ATTACHMENT fill area extends the excess beyond the getItemBounds()
       // box on each side (the inverse of the excess subtracted in coordOffset),
-      // so we add 2 * corr.excess to recover the true coord-space extent that
+      // so we add 2 * excess to recover the true coord-space extent that
       // the feather mask halfSize must be based on.
       const itemSize = {
-        x: bounds.max.x - bounds.min.x + 2 * corr.excess,
-        y: bounds.max.y - bounds.min.y + 2 * corr.excess,
+        x: bounds.max.x - bounds.min.x + 2 * excess,
+        y: bounds.max.y - bounds.min.y + 2 * excess,
       };
 
       // shapeSize: the actual visual dimensions of the shape, used by
@@ -439,8 +460,9 @@ async function getPolygonShaderGeometry(
   };
   // Only affects where scene.eval samples; the feather mask uses raw `coord`.
   // Computed from the item-local verts, not the world bounds, so it holds
-  // under rotation (see polygonCoordOffset).
-  const coordOffset = polygonCoordOffset(localVerts, SHAPE_BOUNDS_EXCESS);
+  // under rotation (see polygonCoordOffset). The excess depends on fill
+  // (see drawnHostExcess).
+  const coordOffset = polygonCoordOffset(localVerts, drawnHostExcess(item));
 
   // polyCentre lives in the item-local frame (rotation-invariant) so the
   // shader can subtract it from `coord` (also item-local) and land in the
