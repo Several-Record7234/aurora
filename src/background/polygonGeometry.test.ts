@@ -20,6 +20,7 @@ import {
   recentre,
   aabbCentre,
   hashVertices,
+  polygonCoordOffset,
 } from "./polygonGeometry";
 
 describe("cleanAndSimplify", () => {
@@ -206,5 +207,44 @@ describe("hashVertices", () => {
     const a = [{ x: 1.00, y: 2.00 }];
     const b = [{ x: 1.001, y: 1.999 }];
     expect(hashVertices(a)).toBe(hashVertices(b));
+  });
+});
+
+describe("polygonCoordOffset", () => {
+  it("reduces to halfSize + excess when position is the bounds centre (primitive-derived PATH)", () => {
+    const offset = polygonCoordOffset(
+      { min: { x: 100, y: 200 }, max: { x: 300, y: 600 } },
+      { x: 200, y: 400 },
+      12,
+    );
+    expect(offset).toEqual({ x: 112, y: 212 });
+  });
+
+  // Reproduction from 2026-11-07: a closed CURVE drawn at world coords then
+  // dragged to position (-60.48, -46.26) sampled the scene around a token at
+  // (4875, 4125) under the old offset (bounds.center - position). The
+  // difference between the old and new offsets is the predicted
+  // misregistration; it must carry the shape's centre onto that token.
+  it("accounts for the canvas-measured misregistration of the old CURVE offset", () => {
+    const position = { x: -60.47991943359375, y: -46.2603759765625 };
+    // Control-point AABB of the reported curve, shifted to world space.
+    const bounds = {
+      min: { x: 898.3 + position.x, y: 644.57 + position.y },
+      max: { x: 1770.65 + position.x, y: 1697.85 + position.y },
+    };
+    const centre = {
+      x: (bounds.min.x + bounds.max.x) / 2,
+      y: (bounds.min.y + bounds.max.y) / 2,
+    };
+    const oldOffset = { x: centre.x - position.x, y: centre.y - position.y };
+    const offset = polygonCoordOffset(bounds, position, 12);
+
+    const sampledByOld = {
+      x: centre.x + oldOffset.x - offset.x,
+      y: centre.y + oldOffset.y - offset.y,
+    };
+    const tokenHalfWidth = 75;
+    expect(Math.abs(sampledByOld.x - 4875)).toBeLessThan(tokenHalfWidth);
+    expect(Math.abs(sampledByOld.y - 4125)).toBeLessThan(tokenHalfWidth);
   });
 });

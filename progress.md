@@ -238,7 +238,7 @@ Extend `src/shared/shader.test.ts`:
 4. **PATH command coordinate frame** — *RESOLVED 2026-05-25 from docs, no live test needed*. Confirmed in `c:\Coding\owlbear-rodeo-extensions-SKILL-patterns.md`:
    - **Freehand PATH**: `item.position = (0,0)`, commands in world space.
    - **Primitive-derived PATH**: `item.position = bounds.center` (or elsewhere), commands in local space relative to `item.position`.
-   - **CURVE**: always world-space coords with `item.position = (0,0)` (same convention as freehand PATH); no primitive-derived regime exists.
+   - **CURVE**: ~~always world-space coords with `item.position = (0,0)`~~ **Corrected 2026-11-07 (observed by Andrew):** a Curve is *created* at `item.position = (0,0)` with its points at world coords, but moving it updates only `item.position`, leaving the points untouched. So points are item-local and position is generally non-zero (the bug-repro Curve was at (-60, -46) after a small drag). No primitive-derived regime exists.
 
    **Key simplification vs. brief**: the doc provides a ready-made `transformPoint(p, position, rotation, scale)` helper (no canvas context required) and a `flattenPathToPolyline(commands, position, rotation, scale)` function that subdivides Béziers to ~10px tolerance and returns world-space vertices directly. Because `transformPoint` translates by `position` (zero for freehand → no-op), **the same code path handles both regimes** — there is no need for branching in `worldVertsToShaderLocal`. Copy both helpers from the skill doc verbatim. Flicker's `getPathShaderGeometry` formula (for the shader-local `coordOffset`) is still required separately; the two helpers operate at different stages (world-space vertex extraction vs. shader-local position offset).
 
@@ -318,4 +318,6 @@ All gates green: 101/101 tests, `npm run build` clean. Aurora version remains 0.
 - 2026-11-07 12:34 -- SESSION START: pack up; verify the staged help-page CSP fix (times recovered from session transcript)
 
 - 2026-11-07 12:45 -- SESSION END: verified + committed the help-page CSP fix (inline <script> -> gitignored public/help.js via build-help.js; <script src defer>); build green, 104 tests, help.js 2467B = portfolio standard; pushed. Outstanding: human browser check + deployed-CSP confirmation (CF-only). NB log gap: the CORS 'any origin' (2872f22) and store.md (15b4baf) commits were made in a different session, so their times are not in this transcript.
+
+- 2026-11-07 12:55 -- SESSION START: confirm the help-page CSP fix on the deployed Cloudflare page; review the CORS + store.md commits that shipped with it
 

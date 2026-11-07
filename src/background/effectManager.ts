@@ -42,6 +42,7 @@ import {
   recentre,
   aabbCentre,
   hashVertices,
+  polygonCoordOffset,
 } from "./polygonGeometry";
 
 /** True iff this item is a candidate polygon host (PATH or closed CURVE). */
@@ -378,9 +379,8 @@ interface PolygonShaderGeometry {
  *   2. Clean (Clipper offset=0) and simplify to <= POLYGON_MAX_VERTICES.
  *   3. Look up world-space AABB via OBR.scene.items.getItemBounds (this
  *      already accounts for item position/rotation/scale).
- *   4. Compute coordOffset using the Flicker PATH formula (verified for
- *      freehand and primitive-derived PATH and for CURVE — see
- *      c:\Coding\Flicker\src\background\effectManager.ts:141).
+ *   4. Compute coordOffset using the Flicker PATH formula (see
+ *      polygonCoordOffset for what has and has not been verified).
  *   5. Transform vertices into the shader's correctedCoord frame.
  *   6. Look up or compute the inradius (cached by vertex hash; ~12 ms cold,
  *      free on cache hit).
@@ -435,21 +435,13 @@ async function getPolygonShaderGeometry(
     x: (bounds.min.x + bounds.max.x) / 2,
     y: (bounds.min.y + bounds.max.y) / 2,
   };
-  // Empirical formula derived from a diagnostic: with coordOffset = (0,0),
-  // scene.eval samples at item.position. That tells us modelView's translation
-  // component is item.position (not bounds.center, not parent.position).
-  // For uv = corrected + item.position to equal the pixel's world position W:
-  //   corrected = W - item.position
-  //   coord = W - effect.position = W - bounds.center (effect-local)
-  //   coordOffset = corrected - coord = bounds.center - item.position
-  // Differs sharply from Flicker's halfW + 2*(item.position - bounds.center) +
-  // EXCESS, which appears to have been masked by Flicker's circular falloff
-  // hiding scene-sampling errors. This formula is exact at rotation=0; under
-  // rotation modelView also rotates corrected, so the relationship may shift.
-  const coordOffset = {
-    x: boundsCenter.x - item.position.x,
-    y: boundsCenter.y - item.position.y,
-  };
+  // Only affects where scene.eval samples; the feather mask uses raw `coord`.
+  // Unverified under rotation, where modelView also rotates `corrected`.
+  const coordOffset = polygonCoordOffset(
+    bounds,
+    item.position,
+    SHAPE_BOUNDS_EXCESS,
+  );
 
   // polyCentre lives in the item-local frame (rotation-invariant) so the
   // shader can subtract it from `coord` (also item-local) and land in the

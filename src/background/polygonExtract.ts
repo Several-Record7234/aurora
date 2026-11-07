@@ -10,7 +10,7 @@
  * testable in plain Node Vitest.
  */
 
-import type { Vector2, PathCommand } from "@owlbear-rodeo/sdk";
+import type { BoundingBox, Vector2, PathCommand } from "@owlbear-rodeo/sdk";
 
 // PATH command type discriminators — values match the SDK's `Command` enum.
 // Inlined to keep this module free of SDK runtime imports.
@@ -232,4 +232,35 @@ export function hashVertices(verts: Vector2[]): string {
     h = Math.imul(h, 0x01000193);
   }
   return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * Shader `coordOffset` that registers a PATH/CURVE host's `scene.eval()`
+ * samples with the map beneath it. The effect must be positioned at the
+ * world bounds centre.
+ *
+ *   coordOffset = bounds.halfSize + 2 * (item.position - bounds.center) + excess
+ *
+ * Flicker's empirical PATH formula (c:\Coding\Flicker\progress.md, "PATH
+ * Light Geometry — Solved"). Confirmed for CURVE on canvas 2026-11-07: the
+ * previous `bounds.center - item.position` sampled ~3x the shape's distance
+ * from the world origin away, and this formula predicted the reported
+ * displacement to within 46 units. Flicker fitted it with `item.position` near
+ * (0,0); the `2 *` term was then confirmed on canvas by dragging a CURVE
+ * several thousand units from where it was drawn, alongside a freehand PATH
+ * and a trimmed/joined PATH (position != bounds centre). Rotation untested.
+ */
+export function polygonCoordOffset(
+  bounds: Pick<BoundingBox, "min" | "max">,
+  position: Vector2,
+  excess: number,
+): Vector2 {
+  const centre = {
+    x: (bounds.min.x + bounds.max.x) / 2,
+    y: (bounds.min.y + bounds.max.y) / 2,
+  };
+  return {
+    x: (bounds.max.x - bounds.min.x) / 2 + 2 * (position.x - centre.x) + excess,
+    y: (bounds.max.y - bounds.min.y) / 2 + 2 * (position.y - centre.y) + excess,
+  };
 }

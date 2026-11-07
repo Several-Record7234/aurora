@@ -30,6 +30,7 @@ export {
   recentre,
   aabbCentre,
   hashVertices,
+  polygonCoordOffset,
 } from "./polygonExtract";
 
 // Clipper2 operates on int64 coords; multiply floats by SCALE on input and
