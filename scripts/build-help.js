@@ -188,6 +188,79 @@ function buildNav(headings) {
 
 const tocHtml = buildNav(headings);
 
+/*
+ * Page behaviour, emitted as public/help.js rather than an inline <script>.
+ *
+ * The standard OBR-extension public/_headers sets `script-src 'self'` with no
+ * 'unsafe-inline', so an inline block is blocked by the browser \u2014 and the page
+ * still renders perfectly, so the failure is completely silent: only the copy
+ * buttons, scroll-spy and mobile sidebar toggle die. It cannot be reproduced
+ * locally either, because _headers is applied by Cloudflare alone. Note the
+ * asymmetry: style-src DOES allow 'unsafe-inline', so the <style> above is fine.
+ *
+ * Keep this a plain static file \u2014 no interpolation from the build script \u2014 so
+ * `script-src 'self'` is all the page ever needs.
+ */
+const HELP_JS = `document.querySelectorAll("pre").forEach(pre => {
+  const btn = document.createElement("button");
+  btn.className = "copy-btn";
+  btn.textContent = "Copy";
+  btn.addEventListener("click", () => {
+    const text = pre.querySelector("code")?.textContent ?? pre.textContent;
+    navigator.clipboard?.writeText(text).catch(() => {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+      document.body.removeChild(ta);
+    });
+    btn.textContent = "Copied!";
+    setTimeout(() => btn.textContent = "Copy", 1500);
+  });
+  pre.appendChild(btn);
+});
+
+const toggle  = document.getElementById("sidebarToggle");
+const sidebar = document.getElementById("sidebar");
+toggle.addEventListener("click", () => sidebar.classList.toggle("open"));
+sidebar.querySelectorAll("a").forEach(a => {
+  a.addEventListener("click", () => sidebar.classList.remove("open"));
+});
+
+const navLinks    = [...sidebar.querySelectorAll("a[href^='#']")];
+const h2Links     = navLinks.filter(a => a.dataset.level === "2");
+const allSections = navLinks
+  .map(a => document.getElementById(a.getAttribute("href").slice(1)))
+  .filter(Boolean);
+const h2Sections  = h2Links
+  .map(a => document.getElementById(a.getAttribute("href").slice(1)))
+  .filter(Boolean);
+
+function updateActive() {
+  const THRESHOLD = 80;
+  let current = allSections[0];
+  for (const s of allSections) { if (s.getBoundingClientRect().top <= THRESHOLD) current = s; }
+  let currentH2 = h2Sections[0];
+  for (const s of h2Sections) { if (s.getBoundingClientRect().top <= THRESHOLD) currentH2 = s; }
+  navLinks.forEach(a => a.classList.toggle("active", a.getAttribute("href") === "#" + current?.id));
+  sidebar.querySelectorAll("li").forEach(li => li.classList.remove("expanded"));
+  const activeH2Link = h2Links.find(a => a.getAttribute("href") === "#" + currentH2?.id);
+  if (activeH2Link) activeH2Link.closest("li").classList.add("expanded");
+}
+window.addEventListener("scroll", updateActive, { passive: true });
+updateActive();
+
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener("click", e => {
+    const target = document.getElementById(a.getAttribute("href").slice(1));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: "smooth" });
+      history.replaceState(null, "", a.getAttribute("href"));
+    }
+  });
+});
+`;
+
 const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -347,69 +420,11 @@ const html = `<!DOCTYPE html>
       ${body}
     </div>
   </div>
-  <script>
-    document.querySelectorAll("pre").forEach(pre => {
-      const btn = document.createElement("button");
-      btn.className = "copy-btn";
-      btn.textContent = "Copy";
-      btn.addEventListener("click", () => {
-        const text = pre.querySelector("code")?.textContent ?? pre.textContent;
-        navigator.clipboard?.writeText(text).catch(() => {
-          const ta = document.createElement("textarea");
-          ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-          document.body.appendChild(ta); ta.select(); document.execCommand("copy");
-          document.body.removeChild(ta);
-        });
-        btn.textContent = "Copied!";
-        setTimeout(() => btn.textContent = "Copy", 1500);
-      });
-      pre.appendChild(btn);
-    });
-
-    const toggle  = document.getElementById("sidebarToggle");
-    const sidebar = document.getElementById("sidebar");
-    toggle.addEventListener("click", () => sidebar.classList.toggle("open"));
-    sidebar.querySelectorAll("a").forEach(a => {
-      a.addEventListener("click", () => sidebar.classList.remove("open"));
-    });
-
-    const navLinks    = [...sidebar.querySelectorAll("a[href^='#']")];
-    const h2Links     = navLinks.filter(a => a.dataset.level === "2");
-    const allSections = navLinks
-      .map(a => document.getElementById(a.getAttribute("href").slice(1)))
-      .filter(Boolean);
-    const h2Sections  = h2Links
-      .map(a => document.getElementById(a.getAttribute("href").slice(1)))
-      .filter(Boolean);
-
-    function updateActive() {
-      const THRESHOLD = 80;
-      let current = allSections[0];
-      for (const s of allSections) { if (s.getBoundingClientRect().top <= THRESHOLD) current = s; }
-      let currentH2 = h2Sections[0];
-      for (const s of h2Sections) { if (s.getBoundingClientRect().top <= THRESHOLD) currentH2 = s; }
-      navLinks.forEach(a => a.classList.toggle("active", a.getAttribute("href") === "#" + current?.id));
-      sidebar.querySelectorAll("li").forEach(li => li.classList.remove("expanded"));
-      const activeH2Link = h2Links.find(a => a.getAttribute("href") === "#" + currentH2?.id);
-      if (activeH2Link) activeH2Link.closest("li").classList.add("expanded");
-    }
-    window.addEventListener("scroll", updateActive, { passive: true });
-    updateActive();
-
-    document.querySelectorAll('a[href^="#"]').forEach(a => {
-      a.addEventListener("click", e => {
-        const target = document.getElementById(a.getAttribute("href").slice(1));
-        if (target) {
-          e.preventDefault();
-          target.scrollIntoView({ behavior: "smooth" });
-          history.replaceState(null, "", a.getAttribute("href"));
-        }
-      });
-    });
-  </script>
+  <script src="help.js" defer></script>
 </body>
 </html>
 `;
 
 writeFileSync(resolve(ROOT, "public", "help.html"), html, "utf-8");
-console.log("\u2713 public/help.html generated from README.md");
+writeFileSync(resolve(ROOT, "public", "help.js"), HELP_JS, "utf-8");
+console.log("\u2713 public/help.html + public/help.js generated from README.md");

@@ -268,6 +268,7 @@ All gates green: 101/101 tests, `npm run build` clean. Aurora version remains 0.
 - [ ] **Rotated PATH/CURVE behaviour**: rotate a polygon host with active Aurora — known limitation: shader-local verts are baked in world frame minus bounds.center, while effect.rotation = parent.rotation. At rotation=0 (common case) this is exact; at other rotations there will be a visible angular offset between the rendered shape and the feather boundary. If visible, refine `worldVertsToShaderLocal` to also inverse-rotate by parent.rotation (small change — multiply by R^-1 around bounds.center before applying coordOffset).
 - [ ] **Visual fidelity vs. CURVE tension**: cardinal-spline tessellation in `tessellatePathCurve` uses tension/2 as the cardinal `s` parameter — verify against OBR's actual curve rendering. If the tessellated polygon visibly diverges from the rendered curve, adjust the basis formulas in `polygonExtract.ts:158-180`.
 - [ ] **README + What's New**: add PATH/CURVE polygon hosts to README features section, draft a "What's New 0.9.3" entry in `src/changelog.ts`.
+- [ ] **Help-page CSP fix - code fixed & committed 2026-11-07; two external checks remain**: `scripts/build-help.js` now emits the help page's behaviour as `public/help.js` (referenced via `<script src="help.js" defer>`) instead of an inline `<script>` block, so it survives the `_headers` CSP's `script-src 'self'` (no `unsafe-inline`) instead of being silently blocked — aurora has a blocking CSP and this bug was live in production. Open `dist/help.html` in a browser and confirm the code-block Copy buttons work, the sidebar scroll-spy highlights the current section while scrolling, and the mobile sidebar toggle opens/closes. This proves the extraction preserved behaviour — it structurally CANNOT prove the CSP fix itself, since `_headers` is applied by Cloudflare Pages only; that half is only observable on the deployed page.
 
 ---
 
@@ -305,4 +306,16 @@ All gates green: 101/101 tests, `npm run build` clean. Aurora version remains 0.
 - 2026-05-25 17:30 -- SESSION END: PATH/CURVE polygon host Phases 0–4 complete (deps, polygon geometry + extract split, polygon shader, effectManager wiring, popover/menu UI). 101/101 tests pass; build clean. Browser verification + 0.9.3 version bump deferred to next session — see Outstanding list in Feature section.
 
 - 2026-05-25 18:00 -- SESSION START: PATH/CURVE polygon host — outstanding verification + 0.9.3 prep
+
+- 2026-07-15 11:10 -- SESSION START: triage working tree; stage & push ready work (times recovered from session transcript)
+
+- 2026-07-15 11:22 -- SESSION END: split into three commits (polygon host v0.9.3 feature; What's New font fix; ignore-rule housekeeping, untrack Claude.md + track progress.md); tested and pushed to origin/main.
+
+- 2026-08-13 16:22 -- SESSION START: evaluate + execute metadata namespace change to best-practice reverse-domain (times recovered from session transcript)
+
+- 2026-08-13 17:49 -- SESSION END: migrated PLUGIN_BASE to com.several-record.aurora (v0.9.4) with auto-migration from the two legacy URL namespaces; retired com.aurora-vtt.aurora era; retro-tagged v0.9.3 + tagged v0.9.4; fixed manifest version-injection (dead generateBundle -> closeBundle, matching Forms); wrote portfolio-audit prompt for the dead-generateBundle pattern. Pushed to origin/main.
+
+- 2026-11-07 12:34 -- SESSION START: pack up; verify the staged help-page CSP fix (times recovered from session transcript)
+
+- 2026-11-07 12:45 -- SESSION END: verified + committed the help-page CSP fix (inline <script> -> gitignored public/help.js via build-help.js; <script src defer>); build green, 104 tests, help.js 2467B = portfolio standard; pushed. Outstanding: human browser check + deployed-CSP confirmation (CF-only). NB log gap: the CORS 'any origin' (2872f22) and store.md (15b4baf) commits were made in a different session, so their times are not in this transcript.
 

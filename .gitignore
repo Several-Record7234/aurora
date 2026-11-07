@@ -30,6 +30,7 @@ pnpm-debug.log*
 
 # Generated help page
 /public/help.html
+/public/help.js
 
 # OS files
 .DS_Store
