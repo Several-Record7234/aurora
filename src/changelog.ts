@@ -13,6 +13,20 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "0.9.5",
+    date: "2026-11-07",
+    changes: [
+      {
+        type: "fix",
+        text: "**Polygon host alignment**: Aurora on a closed Curve object or a freehand Path object now grades the map directly beneath the shape. Previously it could sample pixels from elsewhere in the Scene, leading to very confusing visual results! Thanks to Jules on Discord for the report.",
+      },
+      {
+        type: "fix",
+        text: "**Polygon host edges**: the effect now reaches the true edge of Curve shapes at every curve tension value, leaving no thin ungraded slivers along the outline.",
+      },
+    ],
+  },
+  {
     version: "0.9.4",
     date: "2026-08-13",
     changes: [
